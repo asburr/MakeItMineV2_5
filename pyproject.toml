@@ -1,0 +1,20 @@
+[build-system]
+requires = [ "hatchling >= 1.13" ]
+build-backend = "hatchling.build"
+[project]
+name="MakeItMineV2_5"
+version="0.0.1"
+description=""
+readme="README.md"
+
+# dependencies for src/
+dependencies = [
+]
+requires-python=">=3.10"
+
+# dependencies for test/
+test = [
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/MakeItMineV2_5"]

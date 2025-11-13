@@ -1,0 +1,6 @@
+.git
+.spyproject
+__pycache__/
+*.py[cod]
+dist/
+venv/
