@@ -58,12 +58,13 @@ class GtMake(Make):
     """ rev-parse finds the ancestor [commit id] for the main branch """
     return self._cmd(["git","rev-parse","origin/main"]).strip()
 
-  def _gtremotebranch(self,localbranch:str) -> bool:
+  def gtremotebranch(self) -> bool:
     """ Does localbranch exist remotely? """
-    if self._cmd(["git","ls-remote","--head","origin",localbranch]):
-      return True
-    else:
-      return False
+    localbranch = self.gtlocalbranch()
+    self._cmd(["git","fetch"],show=True)
+    for branch in self._cmd(["git","branch","-r"],show=True).split(os.linesep):
+      if localbranch in branch: return True
+    return False
 
   def gtbranch(self,branch:str) -> None:
     """ Switch to a branch. Create branch locally if it does not exist. """
@@ -86,11 +87,11 @@ class GtMake(Make):
     """ Commit and push changes remotely """
     if self.gtlocalchanges():
       self._cmdInteractive(["git","commit","."],show=True)
-    localbranch = self.gtlocalbranch()
-    if localbranch == "master" or localbranch == "main":
+    if self.gtremotebranch():
       self._cmd(["git","push"],show=True)
       return
     # -u setups tracking between the new remote branch and the existing local branch
+    localbranch = self.gtlocalbranch()
     self._cmd(["git","push","-u","origin",localbranch],show=True)
 
   def gtmerge(self) -> None:
