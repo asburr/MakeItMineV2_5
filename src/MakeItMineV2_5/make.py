@@ -92,8 +92,9 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     if show: print(" ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep}stderr={proc.stderr}stdout={proc.stdout}")
-        if fail: os._exit(1)
+        if fail:
+          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep}stderr={proc.stderr}stdout={proc.stdout}")
+          os._exit(1)
     if proc.stderr:
         return proc.stderr + "\n" + proc.stdout
     return proc.stdout
@@ -207,7 +208,7 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
       for param in cls.command_parameters_optional[a.command]:
         params[param] = getattr(a,param,None)
     r = getattr(m,a.command)(**params)
-    if r: print(r)
+    if r is not None: print(r)
 
 
 if __name__ == "__main__":
