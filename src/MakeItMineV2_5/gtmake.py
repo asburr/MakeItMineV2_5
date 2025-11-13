@@ -50,13 +50,15 @@ class GtMake(Make):
     """ Changes made locally but not commited. """
     return self._cmd(["git","diff","--name-only"]).strip()
 
-  def _gtcommit_branch(self,localbranch:str) -> str:
+  def gtcommit_branch(self) -> str:
     """ merge-base finds the ancestor [commit id] for the local branch """
+    localbranch = self.gtlocalbranch()
     return self._cmd(["git","merge-base","main",localbranch]).strip()
     
-  def gtcommit_main(self) -> str:
-    """ rev-parse finds the ancestor [commit id] for the main branch """
-    return self._cmd(["git","rev-parse","origin/main"]).strip()
+  def gtcommit_origin(self) -> str:
+    """ rev-parse finds the ancestor [commit id] for the origin of the branch """
+    localbranch = self.gtlocalbranch()
+    return self._cmd(["git","rev-parse",f"origin/{localbranch}"]).strip()
 
   def gttrackingremotebranch(self) -> bool:
     """ Does localbranch track a remote branch? """
@@ -84,9 +86,12 @@ class GtMake(Make):
     self._cmd(["git","switch",branch],show=True)
 
   def gtpush(self) -> None:
-    """ Commit and push changes remotely """
+    """ Commit and push to remote branch """
     if self.gtlocalchanges():
       self._cmdInteractive(["git","commit","."],show=True)
+    if self.gtcommit_origin() != self.gtcommit_branch():
+      print("Remote branch is ahead of local branch")
+      self._cmd(["git","pull"],show=True)
     if self.gttrackingremotebranch():
       self._cmd(["git","push"],show=True)
       return
@@ -132,7 +137,7 @@ class GtMake(Make):
     localbranch = self.gtlocalbranch()
     if localbranch == "main":
       if "Your branch is behind" not in status:
-        print("Nothing to rebase, {localbranch} is up to date with main")
+        print(f"Nothing to rebase, {localbranch} is up to date with main")
         return
       self._cmd(["git","fetch"],show=True)
       self._cmdInteractive(["git","rebase"],show=True)
