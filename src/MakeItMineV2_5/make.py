@@ -2,6 +2,7 @@ import os
 import re
 import argparse
 import subprocess
+from texttable import Texttable
 
 
 class Make():
@@ -95,7 +96,7 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
         if fail:
           print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep}stderr={proc.stderr}stdout={proc.stdout}")
           os._exit(1)
-    if proc.stderr:
+    if proc.stderr and not fail:
         return proc.stderr + "\n" + proc.stdout
     return proc.stdout
 
@@ -169,11 +170,23 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
   def _show(self) -> list:
     """ Gather project status """
     return []
+  
+  def _show_align(self) -> list:
+    """ Gather table alignment as "l" "r" "c" """
+    return []  
 
   def show(self) -> None:
     """ Show the status of the project. """
-    print(",".join(self._showTitles()))
-    print(",".join(self._show()))
+    table = Texttable()
+    align = self._show_align()
+    titles = self._showTitles()
+    body = self._show()
+    if len(align) != len(titles):
+      print("Error length of title not matching alignment")
+      os._exit(1)
+    table.set_cols_align(align)
+    table.add_rows([titles]+[body])
+    print(table.draw())
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):

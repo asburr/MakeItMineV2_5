@@ -1,5 +1,6 @@
 import argparse
 import os
+import datetime
 from MakeItMineV2_5.make import Make
 
 
@@ -38,27 +39,15 @@ class GtMake(Make):
     """ Name of the local branch """
     return self._cmd(["git","branch","--show-current"]).strip()
 
-  def _gtremotechanges(self,localbranch) -> str:
-    """ Changes published to the remote branch that need merging into main. """
-    return self._cmd(["git","diff","--name-only",f"origin/{localbranch}..origin/main"]).strip()
-
-  def gtlocalcommits(self) -> str:
-    """ Changes commited to the local branch but not published remotely. """
-    return self._cmd(["git","diff","--name-only","origin","HEAD"]).strip()
-    
-  def gtlocalchanges(self) -> str:
-    """ Changes made locally but not commited. """
-    return self._cmd(["git","diff","--name-only"]).strip()
-
   def gtcommit_branch(self) -> str:
     """ merge-base finds the ancestor [commit id] for the local branch """
     localbranch = self.gtlocalbranch()
-    return self._cmd(["git","merge-base","main",localbranch]).strip()
+    return self._cmd(["git","merge-base","main",localbranch],show=True).strip()
     
   def gtcommit_origin(self) -> str:
     """ rev-parse finds the ancestor [commit id] for the origin of the branch """
     localbranch = self.gtlocalbranch()
-    return self._cmd(["git","rev-parse",f"origin/{localbranch}"]).strip()
+    return self._cmd(["git","rev-parse",f"origin/{localbranch}"],show=True).strip()
 
   def gttrackingremotebranch(self) -> bool:
     """ Does localbranch track a remote branch? """
@@ -89,14 +78,13 @@ class GtMake(Make):
     """ Commit and push to remote branch """
     if self.gtlocalchanges():
       self._cmdInteractive(["git","commit","."],show=True)
+    localbranch = self.gtlocalbranch()
+    if not self.gttrackingremotebranch():
+      self._cmd(["git","branch",f"--track=origin/{localbranch}"],show=True)
     if self.gtcommit_origin() != self.gtcommit_branch():
       print("Remote branch is ahead of local branch")
       self._cmd(["git","pull"],show=True)
-    if self.gttrackingremotebranch():
-      self._cmd(["git","push"],show=True)
-      return
     # -u setups tracking between the new remote branch and the existing local branch
-    localbranch = self.gtlocalbranch()
     self._cmd(["git","push","-u","origin",localbranch],show=True)
 
   def gtmerge(self) -> None:
@@ -174,7 +162,7 @@ class GtMake(Make):
     self._cmd(["git","remote","set-url","--add","origin",url],show=True)
     self.gtpush()
 
-  def gtremote(self,url:str) -> None:
+  def gtsetremote(self,url:str) -> None:
     """ Setup the remote URL for a newly created local project. """
     for u in self._cmd(["git","remote","get-url","origin","--all"],show=True).split(os.linesep):
       if u != url:
@@ -185,13 +173,68 @@ class GtMake(Make):
         return
     self._cmd(["git","remote","set-url","--add","origin",url],show=True)
 
+  def _show_align(self) -> list:
+    """ Gather table alignment as "l" "r" "c" """
+    return super()._show_align()+["l","l","l"]
+
+  def gtgetremote(self) -> str:
+    """ Get origin for the remote branch. """
+    return self._cmd(["git","rev-parse","--abbrev-ref","--symbolic-full-name","@{u}"],show=False).split("/")[2]
+
+  def gtorigin(self,show=True) -> str:
+    """ Epoch and sid for the last change on origin in dd:hh:mm. """
+    branch = self.gtlocalbranch()
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}"],show=show).split("\n")[0].split(" ")
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    return f"origin/{branch} {a[1]} {dd:>02d}:{hh:>02d}:{mm:>02d}"
+
+  def gtoriginfiles(self,show=True) -> str:
+    """ Changes made in origin of this branch that need rebasing into branch. """
+    branch = self.gtlocalbranch()
+    return self._cmd(["git","diff","--name-only",f"origin/{branch}..HEAD"],show=show).strip()
+
+  def gtremote(self,show=True) -> str:
+    """ Epoch and sid for the lastest change on remote branch in dd:hh:mm. """
+    branch = self.gtlocalbranch()
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}"],show=show).split("\n")[0].split(" ")
+    if not a[0]: return branch
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    return f"{branch} {a[1]} {dd:>02d}:{hh:>02d}:{mm:>02d}"
+
+  def gtremotefiles(self) -> str:
+    """ Changes published to the remote branch that need merging into local branch (HEAD). """
+    branch=self.gtlocalbranch()
+    return self._cmd(["git","diff","--name-only",f"origin/{branch}..HEAD"]).strip()
+
+  def gtlocal(self,show=True) -> str:
+    """ Epoch and sid for the lastest change on local branch in dd:hh:mm. """
+    branch = self.gtlocalbranch()
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"{branch}..origin/{branch}"],show=show).split("\n")[0].split(" ")
+    if not a[0]: return branch
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    return f"{branch} {a[1]} {dd:>02d}:{hh:>02d}:{mm:>02d}"
+
+  def gtlocalfiles(self,show=True) -> str:
+    """ Changes commited to the local branch but not published remotely. """
+    branch = self.gtlocalbranch()
+    return self._cmd(["git","diff","--name-only",f"{branch}..origin/{branch}"],show=show).strip()
+    
   def _showTitles(self) -> list:
     """ Titles for show """
-    return super()._showTitles()+["branch","remote"]
+    return super()._showTitles()+["gtlocal","gtremote","gtorigin"]
 
   def _show(self) -> list:
     """ Gather project status """
-    return super()._show()+[f"{self.gtlocalbranch()}","sid dd:mm"]
+    return super()._show()+[self.gtlocal(show=False),self.gtremote(show=False),self.gtorigin(show=False)]
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):
@@ -199,8 +242,8 @@ class GtMake(Make):
     super()._main(ap)
     ap.add_argument('-b', '--branch', help="Branch for gtbranch")
     cls.command_parameters["gtbranch"] = ["branch"]
-    ap.add_argument('-u', '--url', help="URL of remote git project for gtremote")
-    cls.command_parameters["gtremote"] = ["url"]
+    ap.add_argument('-u', '--url', help="URL of remote git project for gtsetremote")
+    cls.command_parameters["gtsetremote"] = ["url"]
 
 
 if __name__ == "__main__":

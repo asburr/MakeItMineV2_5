@@ -58,10 +58,13 @@ __pycache/
 download/
 """)
 
-  def dkcheck(self) -> None:
+  def dkcheck(self,show=True) -> None:
     """ Check if docker is installed """
-    if not self._cmd(["which","docker"],show=True):
-      print("docker is not installed, please install docker")
+    if not self._cmd(["which","docker"],show=show):
+      print("docker is not installed. apt update; apt-get install docker.io; sudo usermod -aG docker ${USER}")
+      sys.exit(1)
+    if "docker" not in self._cmd(["groups"],show=show):
+      print("user is not in the docker group. sudo usermod -aG docker ${USER}; login again!!")
       sys.exit(1)
 
   def dkbuild(self,secret:str) -> None:
@@ -169,31 +172,26 @@ download/
                 "down"],show=True)
     self._cmd(["docker","network","prune","-f"],show=True)
 
-  def _dkprodimage(self) -> bool:
-    """ Check if the docker production image exists """
+  def dkimages(self) -> str:
+    """ Detect prod or dev images. """
     name = self.name()
     version = self.version()
-    if self._cmd(["docker","images","-q",f"{name}:{version}"]):
-      return True
-    else:
-      return False
+    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],show=True)
+    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],show=False)
+    return ("prod:Y" if prod else "prod:N") + " " + ("dev:Y" if dev else "dev:N")
 
-  def _dkdevimage(self) -> bool:
-    """ Check if the docker production image exists """
-    name = self.name()
-    version = self.version()
-    if self._cmd(["docker","images","-q",f"{name}_editable:{version}"]):
-      return True
-    else:
-      return False
+  def _show_align(self) -> list:
+    """ Gather table alignment as "l" "r" "c" """
+    return super()._show_align()+["c"]
 
   def _showTitles(self) -> list:
     """ Titles for show """
-    return super()._showTitles()+["branch","remote"]
+    return super()._showTitles()+["dkimages"]
 
   def _show(self) -> list:
     """ Gather project status """
-    return super()._show()+[f"{self.gtlocalbranch()}",f"sid dd:mm"]
+    self.dkcheck(show=False)
+    return super()._show()+["prod:N dev:N"]
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):

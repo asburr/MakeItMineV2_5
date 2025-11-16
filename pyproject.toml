@@ -9,6 +9,7 @@ readme="README.md"
 
 # dependencies for src/
 dependencies = [
+   "texttable"
 ]
 requires-python=">=3.10"
 

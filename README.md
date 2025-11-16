@@ -1,8 +1,9 @@
 # Project Title
-Simple overview of use/purpose.
+Project building with git, Docker, Python.
 ## Description
-An in-depth paragraph about your project and overview of use.
+Project building using the git development cycle. Packagin Python. Deploying in Docker containers. 
 ## Getting Started
+python 
 ### Dependencies
 * Describe any prerequisites, libraries, OS version, etc., needed before installing program.
 * ex. Windows 10
