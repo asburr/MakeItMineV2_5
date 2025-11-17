@@ -61,7 +61,7 @@ class GtMake(Make):
     localbranch = self.gtlocalbranch()
     self._cmd(["git","fetch"],show=True)
     for branch in self._cmd(["git","config","--get",f"branch.{localbranch}.remote"],show=True,fail=False).split(os.linesep):
-      if localbranch in branch: return True
+      if "origin" == branch: return True
     return False
 
   def gtpush(self) -> None:
