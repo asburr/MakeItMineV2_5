@@ -16,7 +16,7 @@ class DkMake(Make):
     self.dkr = os.path.join("example","release.env")
     self.dkdr = os.path.join("example","dkrun_release.env")
 
-  def files(self) -> list:
+  def _files(self) -> list:
     return super().files() + [self.dkf,self.dkdc,self.dkr,self.dkdr]
 
   def create_Dockerfile(self) -> None:
@@ -132,6 +132,7 @@ download/
     self._cmd(["docker","rm",container_name],show=True)
 
   def dkpull(self) -> None:
+    """ Put into the local branch any changes on the remote branch """ 
     p = os.path.join("example","docker-compose.yml")
     if not os.path.exists(p):
       print(f"{p} does not exist")

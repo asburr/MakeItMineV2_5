@@ -14,7 +14,7 @@ class Make():
     self.bv = "BUILD_VERSION.txt"
     self.readme = "README.md"
 
-  def files(self) -> list:
+  def _files(self) -> list:
     return [self.bv,self.readme]
 
   def createREADME(self) -> None:
@@ -99,9 +99,6 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     if proc.stderr and not fail:
         return proc.stderr + "\n" + proc.stdout
     return proc.stdout
-
-  def test(self) -> str:
-    print(self._cmd)
 
   def _cmdInteractive(self,cmd:list,show:bool=False) -> None:
     """ util: Interactive stdin and stdout, this command outputs to the user and takes input from the user. """
@@ -202,12 +199,13 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
 
   @classmethod
   def main(cls):
-    p = argparse.ArgumentParser(description="")
+    p = argparse.ArgumentParser(description="",
+                                formatter_class=argparse.RawTextHelpFormatter)
     m = cls(cwd=os.getcwd())
-    d = {x.replace("_dot_","."):getattr(m,x)
-         for x in dir(cls) if not x.startswith("_")
+    d = {x.replace("_dot_","."):x+":"+(getattr(m,x).__doc__.strip() if getattr(m,x).__doc__ else "?") 
+         for x in dir(cls) if not x.startswith("_") and x !="main"
          and not x.startswith("__Makefile__")}
-    p.add_argument('command', choices=d.keys())
+    p.add_argument('command', choices=d.keys(), help=os.linesep.join(d.values()))
     cls._main(p)
     a = p.parse_args()
     params = {}

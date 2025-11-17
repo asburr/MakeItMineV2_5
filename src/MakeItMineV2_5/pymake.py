@@ -63,7 +63,7 @@ packages = ["src/{name}"]
                   i=p
     return i
 
-  def create_init_dot_py(self) -> None:
+  def pycreate_init_dot_py(self) -> None:
     """ Create the init.py with __Version__ used when importing a package i.e. package.__version__.
     """
     name=self.projectName()
