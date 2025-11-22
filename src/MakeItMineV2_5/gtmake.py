@@ -73,7 +73,7 @@ class GtMake(Make):
     localbranch = self.gtlocalbranch()
     if not self.gttrackingremotebranch():
       self._cmd(["git","branch",f"--track=origin/{localbranch}"],show=True)
-    if self.gtremoteshead():
+    if self.gtremoteahead():
       print("Error: remote is ahead of local. Hint: gtrebaseremote")
       return
     # -u setups tracking between the new remote branch and the existing local branch
