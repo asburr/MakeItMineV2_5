@@ -109,7 +109,9 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
 
   def _cmdstr(self,cmd:list, show:bool=False, fail:bool=True) -> str:
     """ util: return stdout and stderr as a whole string. """
-    return os.linesep.join(self._cmd(cmd,show,fail))
+    a=self._cmd(cmd,show,fail)
+    if len(a): return os.linesep.join(a)
+    return None
 
   def _substrin(self,s:str,a:list) -> bool:
     """ Substring in list of strings. """

@@ -6,6 +6,30 @@ from MakeItMineV2_5.make import Make
 
 class GtMake(Make):
   """ Platform independent recipies for a Makefile supporting a GIT project.
+      git diff and the three dot notation.
+      -==================================-
+      The three dots limits the difference to the work done on the branch on
+      the right of the dots since the common ancestor with the branch on the
+      left. In this case, the remote branch is on the right so it's showing
+      changes in this branch, and the local branch is on the left so it
+      linmited changes to the point at which the local branched from the
+      remote.
+      Therefore, it's showing changes in remote since local branched.
+      Note the two dot notation. When used for diff, the two dots
+      does not limited the difference but shows differences between the
+      heads of both branches. Which is not what we want here, and three dots
+      is what we need for diff.
+      Also note that the dot notation has opposite behaviour with git log.
+      gt log and the two dot notation.
+      -==============================-
+      Note the two dots. When used for log, the two dots limits the list of
+      commits to the work done on the right hand branch from the common
+      ancestor with the branch on the left.
+      Note the three dots. When used for log, the three dots does not
+      limit the commit to any branch but shows all of the comments on both
+      branches since the common ancestor. Which is not want we want here,
+      and two dots is what we need for log.
+      Also note that the dot notation has opposite behaviour with git diff.
   """
 
   def __init__(self,**kwargs):
@@ -73,7 +97,7 @@ class GtMake(Make):
     localbranch = self.gtlocalbranch()
     if not self.gttrackingremotebranch():
       self._cmd(["git","branch",f"--track=origin/{localbranch}"],show=True)
-    if self.gtremoteahead():
+    if self.gtremoteaheadfiles():
       print("Error: remote is ahead of local. Hint: gtrebaseremote")
       return
     # -u setups tracking between the new remote branch and the existing local branch
@@ -176,12 +200,12 @@ class GtMake(Make):
   def gtmainaheadfiles(self,show=True) -> str:
     """ remote..main """
     branch = self.gtlocalbranch()
-    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}..origin/main"],show=show)
+    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}...origin/main"],show=show)
 
   def gtmainaheaddiff(self,show=True) -> str:
     """ remote..main """
     branch = self.gtlocalbranch()
-    return self._cmdstr(["git","diff",f"origin/{branch}..origin/main"],show=show)
+    return self._cmdstr(["git","diff",f"origin/{branch}...origin/main"],show=show)
 
   def gtmainbehind(self,show=True) -> str:
     """ main..remote """
@@ -200,12 +224,12 @@ class GtMake(Make):
   def gtmainbehindfiles(self,show=True) -> str:
     """ Branch commits not released to main branch. """
     branch=self.gtlocalbranch()
-    return self._cmdstr(["git","diff","--name-only",f"origin/main..origin/{branch}"],show=show)
+    return self._cmdstr(["git","diff","--name-only",f"origin/main...origin/{branch}"],show=show)
 
   def gtmainbehinddiff(self,show=True) -> str:
     """ Branch commits not released to main branch. """
     branch=self.gtlocalbranch()
-    return self._cmdstr(["git","diff",f"origin/main..origin/{branch}"],show=show)
+    return self._cmdstr(["git","diff",f"origin/main...origin/{branch}"],show=show)
 
   def gtremoteahead(self,show=True) -> str:
     """ local..remote. """
@@ -222,14 +246,14 @@ class GtMake(Make):
     return f'{cnt}/files\n{branch}/br\n{remote}/uid\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age'
 
   def gtremoteaheadfiles(self,show=True) -> str:
-    """ local..remote. """
+    """ local...remote. """
     branch=self.gtlocalbranch()
-    return self._cmdstr(["git","diff","--name-only",f"{branch}..origin/{branch}"],show=show)
+    return self._cmdstr(["git","diff","--name-only",f"{branch}...origin/{branch}"],show=show)
 
   def gtremoteaheaddiff(self,show=True) -> str:
-    """ local..remote. """
+    """ local...remote. """
     branch=self.gtlocalbranch()
-    return self._cmdstr(["git","diff",f"{branch}..origin/{branch}"],show=show)
+    return self._cmdstr(["git","diff",f"{branch}...origin/{branch}"],show=show)
 
   def gtuntracked(self,show:bool=True) -> str:
     """ Untracked local files. """
@@ -279,12 +303,12 @@ class GtMake(Make):
   def gtremotebehindfiles(self,show=True) -> str:
     """ remote..local """
     branch = self.gtlocalbranch()
-    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}..{branch}"],show=show).strip()
+    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}...{branch}"],show=show).strip()
 
   def gtremotebehinddiff(self,show=True) -> str:
     """ remote..local """
     branch = self.gtlocalbranch()
-    return self._cmdstr(["git","diff",f"origin/{branch}..{branch}"],show=show).strip()
+    return self._cmdstr(["git","diff",f"origin/{branch}...{branch}"],show=show).strip()
 
   def gtfetch(self,show=True) -> None:
     self._cmd(["git","fetch"],show=show)
