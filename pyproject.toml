@@ -9,7 +9,8 @@ readme="README.md"
 
 # dependencies for src/
 dependencies = [
-   "texttable"
+   "texttable",
+   "pyinstaller"
 ]
 requires-python=">=3.10"
 

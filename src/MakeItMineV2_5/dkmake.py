@@ -17,7 +17,8 @@ class DkMake(Make):
     self.dkdr = os.path.join("example","dkrun_release.env")
 
   def _files(self) -> list:
-    return super().files() + [self.dkf,self.dkdc,self.dkr,self.dkdr]
+    """ Perminant files that can be created by this class. """
+    return super()._files()+[self.dkf,self.dkdc,self.dkr,self.dkdr]
 
   def create_Dockerfile(self) -> None:
     """ Create the initial Dockerfile if does not exist. """
@@ -63,7 +64,7 @@ download/
     if not self._cmd(["which","docker"],show=show):
       print("docker is not installed. apt update; apt-get install docker.io; sudo usermod -aG docker ${USER}")
       sys.exit(1)
-    if "docker" not in self._cmd(["groups"],show=show):
+    if "docker" not in self._cmdstr(["groups"],show=show):
       print("user is not in the docker group. sudo usermod -aG docker ${USER}; login again!!")
       sys.exit(1)
 
@@ -173,26 +174,38 @@ download/
                 "down"],show=True)
     self._cmd(["docker","network","prune","-f"],show=True)
 
-  def dkimages(self) -> str:
+  def dkimages(self,show:bool=False) -> str:
     """ Detect prod or dev images. """
     name = self.name()
     version = self.version()
-    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],show=True)
-    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],show=False)
-    return ("prod:Y" if prod else "prod:N") + " " + ("dev:Y" if dev else "dev:N")
+    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],show=show)
+    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],show=show)
+    return ("yes/prod" if prod else "no/prod") + " " + ("yes/dev" if dev else "no/dev")
 
-  def _show_align(self) -> list:
+  def _status_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
-    return super()._show_align()+["c"]
+    return super()._status_align()+["c"]
 
-  def _showTitles(self) -> list:
-    """ Titles for show """
-    return super()._showTitles()+["dkimages"]
+  def _statusTitles(self) -> list:
+    """ Titles for status """
+    return super()._statusTitles()+["dkimages"]
 
-  def _show(self) -> list:
+  def _status(self) -> list:
     """ Gather project status """
     self.dkcheck(show=False)
-    return super()._show()+["prod:N dev:N"]
+    return super()._status()+[self.dkimages(show=False)]
+
+  def _upversion(self,version:str,oldversion:str) -> str:
+    """ Update files with the build version. """
+    name=self.name()
+    if os.path.exists(self.dkr):
+      self._sed(self.dkr,f'IMAGE\s*=\s*{name}:.*',f'IMAGE={name}:{version}')
+      self._sed(self.dkr,f'RELEASE\s*=\s*{name}.*',f'RELEASE={name}:{version}')
+    if os.path.exists(self.dkf):
+      self._sed(self.dkf,f'{name}:[0-9.]*',f'{name}:{version}')
+      self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
+    if os.path.exists(self.dkf):
+      self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):

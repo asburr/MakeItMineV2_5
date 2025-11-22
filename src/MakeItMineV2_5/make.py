@@ -3,6 +3,7 @@ import re
 import argparse
 import subprocess
 from texttable import Texttable
+from pathlib import Path
 
 
 class Make():
@@ -11,13 +12,15 @@ class Make():
 
   def __init__(self,**kwargs):
     self.cwd = kwargs["cwd"]
+    self.home = Path.home()
     self.bv = "BUILD_VERSION.txt"
     self.readme = "README.md"
 
   def _files(self) -> list:
+    """ Perminant files that can be created by this class. """
     return [self.bv,self.readme]
 
-  def createREADME(self) -> None:
+  def README_dot_txt(self) -> None:
     """ Creates the standard README.md. """
     if os.path.exists(self.readme):
       return
@@ -88,29 +91,34 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
           retval.append(l)
     return "\n".join(retval)
 
-  def _cmd(self,cmd:list, show:bool=False, fail:bool=True) -> str:
-    """ util: Non-interactive stdin and stdout, this command captures stdin and stdout. """
+  def _cmd(self,cmd:list, show:bool=False, fail:bool=True) -> list:
+    """ util: Non-interactive stdin and stdout, this command captures stdin and stdout returning as a list of lines. """
     if show: print(" ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         if fail:
           print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep}stderr={proc.stderr}stdout={proc.stdout}")
           os._exit(1)
-    if proc.stderr and not fail:
-        return proc.stderr + "\n" + proc.stdout
-    return proc.stdout
+    e = proc.stderr.strip().split(os.linesep)
+    if not e[0]: e=[] # "".split(os.linesep) => ['']
+    o = proc.stdout.strip().split(os.linesep)
+    if not o[0]: o=[] # "".split(os.linesep) => ['']
+    if e and not fail:
+        return e + o
+    return o
+
+  def _cmdstr(self,cmd:list, show:bool=False, fail:bool=True) -> str:
+    """ util: return stdout and stderr as a whole string. """
+    return os.linesep.join(self._cmd(cmd,show,fail))
+
+  def _substrin(self,s:str,a:list) -> bool:
+    """ Substring in list of strings. """
+    return [x for x in a if s in x] != []
 
   def _cmdInteractive(self,cmd:list,show:bool=False) -> None:
     """ util: Interactive stdin and stdout, this command outputs to the user and takes input from the user. """
     if show: print(" ".join(cmd))
     subprocess.run(cmd)
-
-  def _printChevrons(self,output:str) -> None:
-    """ util: Output is stdout from a command and each line is prepended with >>> before printing. """
-    b = output.strip()
-    if len(b) == 0: return
-    for line in output.strip().split("\n"):
-      print(f">>>{line}")
 
   def _rebuild_target(self,target:str,dependencies: list) -> bool:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
@@ -119,7 +127,7 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
       return True
     for dependency in dependencies:
       if not os.path.exist(dependency):
-        print(f"{dependency} does not existi assuming it will be built when rebuilding {target}")
+        print(f"{dependency} does not exist assuming it will be built when rebuilding {target}")
         return True
       if os.path.getmtime(dependency) > os.path.getmtime(target):
         print(f"{target} is older than {dependency} and needs rebuilding")
@@ -127,7 +135,7 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     print(f"{target} is up to date")
     return False
 
-  def createBUILDVERSION(self) -> None:
+  def BUILDVERSION_dot_txt(self) -> None:
     """ Create the initial build version file. """
     if not os.path.exists(self.bv):
       name = os.path.basename(self.cwd)
@@ -136,7 +144,7 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
 
   def name(self) -> str:
     """ Get projects name """
-    self.createBUILDVERSION()
+    self.BUILDVERSION_dot_txt()
     with open(self.bv,"r") as f:
       for l in f:
         m = re.search('^(.*):(.*)',l)
@@ -145,39 +153,51 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
 
   def version(self) -> str:
     """ Get projects version """
-    self.createBUILDVERSION()
+    self.BUILDVERSION_dot_txt()
     with open(self.bv,"r") as f:
       for l in f:
         m = re.search('^(.*):(.*)',l)
         if m:
           return m.group(2)
 
-  def upversion(self) -> str:
+  def _upversion(self,version:str,oldversion:str) -> None:
+    """ Update files containing version from BUILDVERSION.txt. """
+    pass
+
+  def upversion(self) -> None:
     """ Increment the project version number """
-    a = self.version().split(".")
+    oldversion = self.version()
+    a = oldversion.split(".")
     version =f"{a[0]}.{a[1]}.{int(a[2])+1}"
     name=self.name()
     with open(self.bv,"w") as f:
       f.write(f"{name}:{version}{os.linesep}")
+    self._upversion(version,oldversion)
 
-  def _showTitles(self) -> list:
-    """ Titles for show """
+  def _statusTitles(self) -> list:
+    """ Titles for status """
     return []
 
-  def _show(self) -> list:
+  def _status(self) -> list:
     """ Gather project status """
     return []
   
-  def _show_align(self) -> list:
+  def _statuswarning(self) -> list:
+    """ Any warnings. """
+    return []
+
+  def _status_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
     return []  
 
-  def show(self) -> None:
-    """ Show the status of the project. """
-    table = Texttable()
-    align = self._show_align()
-    titles = self._showTitles()
-    body = self._show()
+  def status(self) -> None:
+    """ Status of the project. """
+    table = Texttable(max_width=os.get_terminal_size().columns)
+    align = self._status_align()
+    titles = self._statusTitles()
+    for warning in self._statuswarning():
+      print(warning)
+    body = self._status()
     if len(align) != len(titles):
       print("Error length of title not matching alignment")
       os._exit(1)
@@ -198,6 +218,20 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     cls.command_parameters_optional={} # [cmd]=list(param:str)
 
   @classmethod
+  def genmakefile(cls,d:dict):
+    """ Generate a Makefile to invoke MakeItMine. """
+    with open("Makefile","w") as f:
+      f.write("""
+ifeq ($(MIM),)
+  $(error $$MIM must be defined as the path to the MakeItMine project)
+endif
+MAKE:=$(MIM)/venv/bin/python -m MakeItMineV2_5.pjmake\n\n
+""")
+      for k,v in d.items():
+        f.write(k+":\n")
+        f.write(f"\t$(MAKE) {k}\n\n")
+
+  @classmethod
   def main(cls):
     p = argparse.ArgumentParser(description="",
                                 formatter_class=argparse.RawTextHelpFormatter)
@@ -205,9 +239,13 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     d = {x.replace("_dot_","."):x+":"+(getattr(m,x).__doc__.strip() if getattr(m,x).__doc__ else "?") 
          for x in dir(cls) if not x.startswith("_") and x !="main"
          and not x.startswith("__Makefile__")}
+    d["genmakefile"] = cls.genmakefile.__doc__
     p.add_argument('command', choices=d.keys(), help=os.linesep.join(d.values()))
     cls._main(p)
     a = p.parse_args()
+    if a.command == "genmakefile":
+      cls.genmakefile(d)
+      return
     params = {}
     if a.command in cls.command_parameters:
       for param in cls.command_parameters[a.command]:

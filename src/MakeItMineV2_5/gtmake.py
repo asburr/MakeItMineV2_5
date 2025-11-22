@@ -11,9 +11,11 @@ class GtMake(Make):
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.gitignore=".gitignore"
+    self.ci = ".gitlab-ci.yml"
 
   def _files(self) -> list:
-    return super().files() + [self.gitignore]
+    """ Perminant files that can be created by this class. """
+    return super()._files() + [self.gitignore,self.ci]
 
   def gtignore(self) -> None:
     """ Create or append to .gitignore in current working directory. """
@@ -35,9 +37,9 @@ class GtMake(Make):
         print(f"Adding {s} to .gitignore")
         f.write(f"{s}{os.linesep}")
 
-  def gtlocalbranch(self) -> None:
+  def gtlocalbranch(self) -> str:
     """ Name of the local branch """
-    return self._cmd(["git","branch","--show-current"]).strip()
+    return self._cmd(["git","branch","--show-current"])[0]
 
   def gtbranch(self,branch:str) -> None:
     """ Switch to a branch. Create branch locally if it does not exist. """
@@ -46,7 +48,7 @@ class GtMake(Make):
       print(f"already on {branch}")
       return
     self._cmd(["git","fetch"],show=True)
-    if branch in self._cmd(["git","branch","--list"],show=True).split("\n"):
+    if branch in self._cmd(["git","branch","--list"],show=True):
       self._cmd(["git","switch",branch],show=True)
       self._cmd(["git","pull",branch],show=True)
       return
@@ -60,78 +62,85 @@ class GtMake(Make):
     """ Does localbranch track a remote branch? """
     localbranch = self.gtlocalbranch()
     self._cmd(["git","fetch"],show=True)
-    for branch in self._cmd(["git","config","--get",f"branch.{localbranch}.remote"],show=True,fail=False).split(os.linesep):
+    for branch in self._cmd(["git","config","--get",f"branch.{localbranch}.remote"],show=True,fail=False):
       if "origin" == branch: return True
     return False
 
   def gtpush(self) -> None:
     """ Commit and push to remote branch """
-    if self.gtlocalfiles():
+    if self.gtuncommittedfiles():
       self._cmdInteractive(["git","commit","."],show=True)
     localbranch = self.gtlocalbranch()
     if not self.gttrackingremotebranch():
       self._cmd(["git","branch",f"--track=origin/{localbranch}"],show=True)
-    if self.gtremotefiles():
-      print("Remote branch is ahead of local branch")
-      self._cmd(["git","pull"],show=True)
+    if self.gtremoteshead():
+      print("Error: remote is ahead of local. Hint: gtrebaseremote")
+      return
     # -u setups tracking between the new remote branch and the existing local branch
     self._cmd(["git","push","-u","origin",localbranch],show=True)
 
-  def gtmerge(self) -> None:
-    """ TO TEST: merge current branch into main branch """
+  def gtrelease(self) -> None:
+    """ TO TEST: release changes on remote branch into origin/main. """
     if self.gtlocalchanges():
       print("Error, commit local changes before merge")
       return
-    localbranch = self.gtlocalbranch()
-    if localbranch == "main":
+    branch = self.gtlocalbranch()
+    if branch == "main":
       print("Error, on main branch and must be on a developer branch")
       return
     self._cmd(["git","checkout","main"],show=True)
     self._cmd(["git","fetch"],show=True)
     self._cmd(["git","pull"],show=True)
-    self._cmd(["git","merge","--no-ff",localbranch],show=True)
+    self._cmd(["git","merge","--no-ff",branch],show=True)
     self._cmd(["git","push"],show=True)
-    
-  def gtrebase(self) ->  None:
-    """ TO TEST: rebase working branch with any new changes in main. """
+
+  def gtrebasemain(self) ->  None:
+    """ TO TEST: rebase local branch with new changes on main. """
     status = self._cmd(["git","status"],show=True)
-    if "interactive rebase in progress" in status:
+    branch = self.gtlocalbranch()
+    if [x for x in status if "interactive rebase in progress" in x]:
       print("INPROGRESS; rebase already in progress")
       self._cmdInteractive(["git","rebase","--continue"],show=True)
       return
-    if self.gtlocalchanges():
-      print("Error, commit local changes before merge")
+    if self.gtuncommittedfiles(show=False):
+      print("Error, commit local changes (gtuncommittedfiles) before merge")
       return
-    localbranch = self.gtlocalbranch()
-    if localbranch == "main":
-      if "Your branch is behind" not in status:
-        print(f"Nothing to rebase, {localbranch} is up to date with main")
-        return
-      self._cmd(["git","fetch"],show=True)
-      self._cmdInteractive(["git","rebase"],show=True)
-    else:
-      if not self.gtmainfiles():
-        print(f"Nothing to rebase, {localbranch} is up to date with main")
-        return
-      self._cmd(["git","fetch","origin"],show=True)
-      self._cmdInteractive(["git","rebase","origin/main"],show=True)
+    if self.gtremoteahead(show=False):
+      print("ERROR gtrebasemain needed due to new changes on remote branch")
+      return
+    if branch == "main":
+      print("ERROR use gtrebasemain when on main")
+      return
+    if not self.gtmainfiles():
+      print(f"Nothing to rebase, {branch} is up to date with main")
+      return
+    self._cmd(["git","fetch","origin"],show=True)
+    self._cmdInteractive(["git","merge","main"],show=True)
 
-  def gtfiles(self) -> str:
-    """ List local files that are not tracked by git. """
-    return self._cmd(["git","ls-files","--others","--exclude-standard"],show=True).strip()
+  def gtrebaseremote(self) ->  None:
+    """ TO TEST: rebase local branch with new changes on remote branch. """
+    status = self._cmd(["git","status"],show=True)
+    if [x for x in status if "interactive rebase in progress" in x]:
+      print("ERROR gtrebasemain in progress")
+      return
+    if self.gtuncommittedfiles(show=False):
+      print("ERROR gtcommit local changes before merge")
+      return
+    self._cmdInteractive(["git","pull","origin","main"],show=True)
 
   def gtadd(self) -> str:
-    """ Add local untracked files to git. """
-    files = [file for file in self.gtlistfiles().split(os.linesep) if file]
-    if files: self._cmd(["git","add"]+files,show=True)
+    """ Add gtuntrackedfiles to git. """
+    files = self.gtuntrackedfiles()
+    if files: self._cmd(["git","add"]+files.split(os.linesep),show=True)
 
   def gtcreate(self) -> None:
     """ Create a Git repository from the current working directory.
         Asks the user for the URL for the remote repo.
     """
     status = self._cmd(["git","status"],show=True,fail=False)
-    if "fatal: not a git repository" not in status:
+    if not self._substrin("fatal: not a git repository",status):
       print("Already a git project")
+      return
     url=input("Create the remote repo and enter the URL:")
     self.gtignore()
     self._cmdInteractive(["git","init","--initial-branch","main","."],show=True)
@@ -142,7 +151,7 @@ class GtMake(Make):
 
   def gtsetremote(self,url:str) -> None:
     """ Setup the remote URL for a newly created local project. """
-    for u in self._cmd(["git","remote","get-url","origin","--all"],show=True).split(os.linesep):
+    for u in self._cmd(["git","remote","get-url","origin","--all"],show=True):
       if u != url:
         print(f"different url in .git/config please edit to delete the url {u}")
         os._exit(1)
@@ -151,72 +160,173 @@ class GtMake(Make):
         return
     self._cmd(["git","remote","set-url","--add","origin",url],show=True)
 
-  def gtmain(self,show=True) -> str:
-    """ Main branch + UID + days:hours:mins for the lastest change on the remote branch. """
+  def gtmainahead(self,show=True) -> str:
+    """ remote..main """
     branch = self.gtlocalbranch()
-    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an","origin/main"],show=show).split("\n")[0].split(" ")
+    if branch == "main": return "n/a on main"
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}..origin/main"],show=show).split("\n")[0].split(" ")
+    if not a[0]: return f"0/files\n{branch}/br"
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
     dd = d.days
     hh = d.seconds//3600
     mm = (d.seconds//60)%60
-    return f"{branch} {a[1]} {dd:>02d}:{hh:>02d}:{mm:>02d}"
+    cnt = len(self.gtmainaheadfiles(show=False).split(os.linesep))
+    return f"{cnt}/files\n{branch}/br\n{a[1]}/uid {dd:>02d}:{hh:>02d}:{mm:>02d}/age"
 
-  def gtmainfiles(self,show=True) -> str:
-    """ Main changes that are not in the remote branch. """
+  def gtmainaheadfiles(self,show=True) -> str:
+    """ remote..main """
     branch = self.gtlocalbranch()
-    return self._cmd(["git","diff","--name-only",f"origin/main..origin/{branch}"],show=show).strip()
+    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}..origin/main"],show=show)
 
-  def gtremote(self,show=True) -> str:
-    """ Remote branch + UID + days:hours:mins for the lastest change on the remote branch. """
+  def gtmainaheaddiff(self,show=True) -> str:
+    """ remote..main """
     branch = self.gtlocalbranch()
-    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}"],show=show).split("\n")[0].split(" ")
-    if not a[0]: return branch
+    return self._cmdstr(["git","diff",f"origin/{branch}..origin/main"],show=show)
+
+  def gtmainbehind(self,show=True) -> str:
+    """ main..remote """
+    branch = self.gtlocalbranch()
+    if branch == "main": return "n/a on main"
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/main..origin/{branch}"],show=show).split("\n")[-1].split(" ")
+    if not a: return f"0/files\n{branch}/br"
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
     dd = d.days
     hh = d.seconds//3600
     mm = (d.seconds//60)%60
     remote = a[1].split("/")[-1]
-    return f'{branch} {remote} {dd:>02d}:{hh:>02d}:{mm:>02d}'
+    cnt = len(self.gtmainbehindfiles(show=False).split(os.linesep))
+    return f'{cnt}/files\n{branch}/br\n{remote}/uid\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age'
 
-  def gtremotefiles(self,show=True) -> str:
-    """ Remote changes that are not in the local branch. """
+  def gtmainbehindfiles(self,show=True) -> str:
+    """ Branch commits not released to main branch. """
     branch=self.gtlocalbranch()
-    return self._cmd(["git","diff","--name-only",f"origin/{branch}..HEAD"],show=show).strip()
+    return self._cmdstr(["git","diff","--name-only",f"origin/main..origin/{branch}"],show=show)
 
-  def gtlocal(self,show=True) -> str:
-    """ Local branch + UID + days:hours:mins for the lastest change on the remote branch. """
+  def gtmainbehinddiff(self,show=True) -> str:
+    """ Branch commits not released to main branch. """
+    branch=self.gtlocalbranch()
+    return self._cmdstr(["git","diff",f"origin/main..origin/{branch}"],show=show)
+
+  def gtremoteahead(self,show=True) -> str:
+    """ local..remote. """
     branch = self.gtlocalbranch()
-    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}..{branch}"],show=show).split("\n")[0].split(" ")
-    if not a[0]: return branch
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"{branch}..origin/{branch}"],show=show)
+    if not a: return f"0/files\n{branch}/br"
+    a=a[-1].split(" ")
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]))
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    remote = a[1].split("/")[-1]
+    cnt = len(self.gtremoteaheeadfiles(show=False).split(os.linesep))
+    return f'{cnt}/files\n{branch}/br\n{remote}/uid\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age'
+
+  def gtremoteaheadfiles(self,show=True) -> str:
+    """ local..remote. """
+    branch=self.gtlocalbranch()
+    return self._cmdstr(["git","diff","--name-only",f"{branch}..origin/{branch}"],show=show)
+
+  def gtremoteaheaddiff(self,show=True) -> str:
+    """ local..remote. """
+    branch=self.gtlocalbranch()
+    return self._cmdstr(["git","diff",f"{branch}..origin/{branch}"],show=show)
+
+  def gtuntracked(self,show:bool=True) -> str:
+    """ Untracked local files. """
+    cnt = len(self._cmd(["git","ls-files","--others","--exclude-standard"],show=show))
+    return f'{cnt}/files'
+
+  def gtuntrackedfiles(self,show:bool=True) -> str:
+    """ Untracked local files. """
+    return self._cmdstr(["git","ls-files","--others","--exclude-standard"],show=show)
+
+  def gtuncommitted(self,show=True) -> str:
+    """ Uncommitted local changes. """
+    branch = self.gtlocalbranch()
+    l = [os.path.getmtime(file) for file in self.gtuncommittedfiles(show=False).split(os.linesep)]
+    if not l: return "0/files"
+    cnt = len(l)
+    oldest = min(l)
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - oldest)
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    return f"{cnt}/files\n{branch}/br\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age"
+
+  def gtuncommittedfiles(self,show=True) -> str:
+    """ Uncommitted local changes. """
+    branch = self.gtlocalbranch()
+    return self._cmdstr(["git","diff","--name-only",f"{branch}"],show=show)
+
+  def gtuncommitteddiff(self,show=True) -> str:
+    """ Uncommitted local changes. """
+    branch = self.gtlocalbranch()
+    return self._cmdstr(["git","diff",f"{branch}"],show=show)
+
+  def gtremotebehind(self,show=True) -> str:
+    """ remote..local """
+    branch = self.gtlocalbranch()
+    a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"origin/{branch}..{branch}"],show=show)
+    if not a: return f"0/files\n{branch}/br"
+    a = a[0].split(" ")
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]) if a else 0)
     dd = d.days
     hh = d.seconds//3600
     mm = (d.seconds//60)%60
-    return f"{branch} {a[1]} {dd:>02d}:{hh:>02d}:{mm:>02d}"
+    cnt = len(self.gtremotebehindfiles(show=False).split(os.linesep))
+    return f"{cnt}/files {branch}/br\n{a[1]}/uid\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age"
 
-  def gtlocalfiles(self,show=True) -> str:
-    """ Local changes commited but not published remotely. """
+  def gtremotebehindfiles(self,show=True) -> str:
+    """ remote..local """
     branch = self.gtlocalbranch()
-    return self._cmd(["git","diff","--name-only",f"origin/{branch}..{branch}"],show=show).strip()
+    return self._cmdstr(["git","diff","--name-only",f"origin/{branch}..{branch}"],show=show).strip()
+
+  def gtremotebehinddiff(self,show=True) -> str:
+    """ remote..local """
+    branch = self.gtlocalbranch()
+    return self._cmdstr(["git","diff",f"origin/{branch}..{branch}"],show=show).strip()
 
   def gtfetch(self,show=True) -> None:
     self._cmd(["git","fetch"],show=show)
 
-  def _show_align(self) -> list:
+  def _statuswarning(self) -> list:
+    if self.gtlocalbranch() == "main":
+      return ["warning (git): You are working on the main branch. Hint: create a developer branch using 'gtbranch <branch name>'"]
+    
+  def _status_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
-    return super()._show_align()+["l","l","l"]
+    return super()._status_align()+["l","l","l","l","l","l"]
 
-  def _showTitles(self) -> list:
-    """ Titles for show """
-    return super()._showTitles()+["gtlocal","gtremote","gtorigin"]
+  def _statusTitles(self) -> list:
+    """ Titles for status """
+    return super()._statusTitles()+[
+      "gtuntracked\n>local\ngtadd",
+      "gtmainahead\nmain>local\ngtrebasemain",
+      "gtremoteahead\nremote>local\ngtrebaseremote",
+      "gtuncommitted\nchange>local\ngtcommit or gtpush",
+      "gtremotebehind\nlocal>remote\ngtpush",
+      "gtmainbehind\nremote>main\ngtrelease"]
 
-  def _show(self) -> list:
+  def _status(self) -> list:
     """ Gather project status """
     self.gtfetch(show=False)
-    remote = self.gtremote(show=False)
-    main = self.gtmain(show=False)
-    if remote == main: main = "On main"
-    return super()._show()+[self.gtlocal(show=False),remote,main]
+    untracked = self.gtuntracked(show=False)
+    remote = self.gtremoteahead(show=False)
+    main = self.gtmainahead(show=False)
+    localremote = self.gtmainbehind(show=False)
+    return super()._status()+[untracked,main,remote,self.gtuncommitted(),self.gtremotebehind(show=False),localremote]
+
+  def _upversion(self,version:str,oldversion:str) -> str:
+    """ Update files containing version from BUILDVERSION.txt. """
+    if os.path.exists(self.ci):
+      self._sed(self.ci,'docker_image_version\s*:.*',f'docker_image__version: {version}')
+
+  def upversion(self) -> None:
+    """ Only up version when there are changes in the project """
+    a = self._cmd(['git','diff','name-only','origin/main'],show=True).split(os.linesep)
+    if self.bv in a: return # Already changed the build version.
+    if a: super().upversion() # Other changes update version.
+
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):

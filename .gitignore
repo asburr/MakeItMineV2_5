@@ -4,3 +4,5 @@ __pycache__/
 *.py[cod]
 dist/
 venv/
+prod_requirements.txt
+dev_requirements.txt
