@@ -1,22 +1,19 @@
-[build-system]
-requires = [ "hatchling >= 1.13" ]
-build-backend = "hatchling.build"
 [project]
-name="MakeItMineV2_5"
-version="0.0.1"
-description=""
-readme="README.md"
-
-# dependencies for src/
+name = "makeitminev2_5"
+version = "0.1.1"
+description = "Project build tools"
+authors = [
+    {name = "asburr",email = "asburr@hotmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
 dependencies = [
    "texttable",
    "pyinstaller"
 ]
-requires-python=">=3.10"
-
-# dependencies for test/
-test = [
+dev = [
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/MakeItMineV2_5"]
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

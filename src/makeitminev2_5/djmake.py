@@ -1,8 +1,5 @@
 import os
-import sys
-import re
-import argparse
-from MakeItMineV2_5.make import Make
+from makeitminev2_5.make import Make
 
 
 class DJMake(Make):
@@ -15,4 +12,4 @@ class DJMake(Make):
 
 
 if __name__ == "__main__":
-  DkMake.main()
+  DJMake.main()

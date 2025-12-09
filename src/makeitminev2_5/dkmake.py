@@ -2,7 +2,7 @@ import os
 import sys
 import re
 import argparse
-from MakeItMineV2_5.make import Make
+from makeitminev2_5.make import Make
 
 
 class DkMake(Make):
@@ -133,7 +133,7 @@ download/
     self._cmd(["docker","rm",container_name],show=True)
 
   def dkpull(self) -> None:
-    """ Put into the local branch any changes on the remote branch """ 
+    """ Download images in release.env, PULL_* """ 
     p = os.path.join("example","docker-compose.yml")
     if not os.path.exists(p):
       print(f"{p} does not exist")
@@ -211,10 +211,8 @@ download/
   def _main(cls,ap:argparse.ArgumentParser):
     """ Add extra parameters. """
     super()._main(ap)
-    ap.add_argument('-s', '--service', help="Service for docker dkrun")
-    cls.command_parameters["dkrun"] = ["service"]
-    ap.add_argument('-S', '--secrets', help="zero, one or more secrets for docker dkbuild")
-    cls.command_parameters_optional["dkbuild"] = ["secrets"]
+    cls._add_argument(ap,'service', help="Service for docker dkrun", cmds=["dkrun"])
+    cls._add_argument(ap,'secrets', help="zero, one or more secrets for docker dkbuild", cmds=["dkbuild"], optional=True)
 
 
 if __name__ == "__main__":
