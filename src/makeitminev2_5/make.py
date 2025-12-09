@@ -158,7 +158,7 @@ class Make():
     """ Perminant files that can be created by this class. """
     return [self.bv,self.readme]
 
-  def setcwd(self,pj:str=None) -> None:
+  def _setcwd(self,pj:str=None) -> None:
     """ Util: change dir to pj or cwd """
     os.chdir(pj if pj else self.cwd)
 
@@ -238,19 +238,19 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
     with open(fn,"a") as f:
       f.write(line+os.linesep)
 
-  def _cmd(self,cmd:list, show:bool=False, fail:bool=True) -> list:
+  def _cmd(self,cmd:list, show:bool=False, fail:bool=True,stderr:bool=False) -> list:
     """ util: Non-interactive stdin and stdout, this command captures stdin and stdout returning as a list of lines. """
     if show: print(" ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         if fail:
-          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep}stderr={proc.stderr}stdout={proc.stdout}")
+          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}")
           os._exit(1)
     e = proc.stderr.strip().split(os.linesep)
     if not e[0]: e=[] # "".split(os.linesep) => ['']
     o = proc.stdout.strip().split(os.linesep)
     if not o[0]: o=[] # "".split(os.linesep) => ['']
-    if e and not fail:
+    if e and stderr:
         return e + o
     return o
 
@@ -283,12 +283,12 @@ This project is licensed under the [NAME HERE] License - see the LICENSE.md file
 
   def _rebuild_target(self,target:str,dependencies: list) -> bool:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
-    if not os.path.exist(target):
+    if not os.path.exists(target):
       print(f"{target} does not exist rebuilding")
       return True
     mtime = os.path.getmtime(target)
     for dependency in dependencies:
-      if not os.path.exist(dependency):
+      if not os.path.exists(dependency):
         # Dependency does not exist assuming it will be built when rebuilding target.
         return True
       if self._newermtime(mtime,dependency):

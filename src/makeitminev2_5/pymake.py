@@ -31,8 +31,9 @@ class PyMake(Make):
     """ Perminant files that can be created by this class. """
     return super()._files()+[self.toml,self.lockfile]
 
-  def pyproject_dot_toml(self) -> str:
+  def pyproject_dot_toml(self,pj:str=None) -> str:
     """ Create pyproject.toml if one does not exists. """
+    self._setcwd(pj)
     if os.path.exists(self.toml):
       print(f'{self.toml} exists')
       return
@@ -58,10 +59,11 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 """)
 
-  def pyinit_dot_py_path(self) -> str:
+  def pyinit_dot_py_path(self,pj:str=None) -> str:
     """ Find the path to the project's __init__.py that contains __version__.
         There should only be one.
     """
+    self._setcwd(pj)
     i = None
     for root, dirs, files in os.walk("src"):
       for file in files:
@@ -76,10 +78,11 @@ build-backend = "poetry.core.masonry.api"
                   i=p
     return i
 
-  def init_dot_py(self) -> str:
+  def init_dot_py(self,pj:str=None) -> str:
     """ Create the init.py with __version__ used when importing a package
         i.e. package.__version__.
     """
+    self._setcwd(pj)
     name=self.name()
     p=os.path.join(self.src,name,"__init__.py")
     text=f'''
@@ -100,15 +103,16 @@ __version__ = version("{name}")
         f.write(text)
     return p
 
-  def pygetpackagedetails(self,package:str) -> dict:
+  def pygetpackagedetails(self,package:str,pj:str=None) -> dict:
     """ until to read package details from pyprojec.toml. """
+    self._setcwd(pj)
     if not os.path.exists(self.toml): return {}
     with open(self.toml, "rb") as f:
         data = tomllib.load(f)
     # Access details under the modern [project] table or legacy [tool.poetry]
     print(data.get("project", data.get("dependencies", {})))
 
-  def pyinstall(self,package:str,version:str=None,internal:bool=False) -> str:
+  def pyinstall(self,package:str,pj:str=None,version:str=None,internal:bool=False) -> str:
     """ pyproject.toml, venv, and lock file - install package.
         Provide the path when the package is 1st party. It is added to the dev
         group as editable, and the prod group with the pinned version found
@@ -118,6 +122,7 @@ __version__ = version("{name}")
         adds a default constraint of "requests^2.1.1" which means any
         version >=2.1.1 and < 3.0.0.
     """
+    self._setcwd(pj)
     self.pysyncvenv() # Must sync venv first, before add packages.
     self.pyuninstall(package) # Must uninstall from all groups before adding!
     p=os.path.join("..",package)
@@ -144,50 +149,62 @@ __version__ = version("{name}")
       os._exit(1)
     self._cmd([self.poetry_p,"add","--group","main",f'"{package}=={version}"'],show=True)
 
-  def pyuninstall(self,package:str) -> str:
+  def pyuninstall(self,package:str,pj:str=None) -> str:
     """ pyproject.toml, venv, and lock file - remove package. """
+    self._setcwd(pj)
     self._cmd([self.poetry_p,"remove",package],fail=False,show=True)
     self._cmd([self.poetry_p,"remove","--group","dev",package],fail=False,show=True)
     self._cmd([self.poetry_p,"remove","--group","prod",package],fail=False,show=True)
 
-  def pyupdateminor(self,package:str) -> str:
+  def pyupdateminor(self,package:str,pj:str=None) -> str:
     """ venv and lock file - update package to the latest minor version. """
+    self._setcwd(pj)
     if package in self._cmd([self.poetry_p,"show","--only","prod"],show=True):
       print("ERROR: package is in dev and prod group, use pyadd")
       os._exit(1)
     self._cmd([self.poetry_p,"update",package],show=True)
 
-  def pyupdatemajor(self,package:str) -> str:
+  def pyupdatemajor(self,package:str,pj:str=None) -> str:
     """ venv and lock file - update package to the latest major version. """
+    self._setcwd(pj)
     if package in self._cmd([self.poetry_p,"show","--only","prod"],show=True):
       print("ERROR: package is in dev and prod group, use pyadd")
       os._exit(1)    
     self._cmd([self.poetry_p,"add",package],show=True)
 
-  def pysyncvenv(self) -> None:
+  def pysyncvenv(self,pj:str=None) -> None:
     """ Sync pyproject.toml and lockfile and venv, so packages can be added
     and removed.
     Check developer packages for local paths.
     """
-    self._cmd([self.poetry_p,"remove","--group","dev"],show=True)
-    for line in self._cmd([self.poetry_p,"show","--top-level","--only","prod"],show=True):
+    self._setcwd(pj)
+    for line in self._cmd([self.poetry_p,"show","--top-level","--only","dev"],fail=False,show=True):
+      print(line)
+      (package,version,*rest) = line.split()
+      self._cmd([self.poetry_p,"remove","--group","dev",package],show=True)
+    for line in self._cmd([self.poetry_p,"show","--top-level","--only","prod"],fail=False,show=True):
       (package,version,*rest) = line.split()
       p=os.path.join("..",package)
       if os.path.exists(p):
         self._cmd([self.poetry_p,"add","--group","dev",p,"--editable"],show=True)
       else:
         self._cmd([self.poetry_p,"add","--group","dev",f'"{package}=={version}"'],show=True)
-    self._cmd([self.poetry_p,"install","--only","main,dev"],show=True)
+    if self._cmd([self.poetry_p,"show","--top-level","--only","dev"],fail=False,show=True):
+      self._cmd([self.poetry_p,"install","--only","main,dev"],show=True)
+    else:
+      self._cmd([self.poetry_p,"install","--only","main"],show=True)
 
-  def pybuild(self) -> None:
+  def pybuild(self,pj:str=None) -> None:
     """ Build a Python distribution wheel and tar in download dir. """
+    self._setcwd(pj)
     if self._rebuild_target(self.wheel,[self.toml,"src"]):
-      self._cmd([self.poetry_p,"lock",self.cwd],show=True)
-      self.syncvenv()
-      self._cmd([self.poetry_p,"build","--wheel","--output",self.download,self.cwd],show=True)
+      self._cmd([self.poetry_p,"lock"],show=True)
+      self.pysyncvenv()
+      self._cmd([self.poetry_p,"build","--format","wheel","--output",self.download],show=True)
 
-  def pytest(self) -> None:
+  def pytest(self,pj:str=None) -> None:
     """ Run pytest. """
+    self._setcwd(pj)
     self.pysyncvenv()
     self._cmd([self.poetry_p,"run","pytest"],show=True)
 
@@ -195,7 +212,7 @@ __version__ = version("{name}")
     """ Update python with the build version. """
     self._cmd([self.poetry_p,"version",version],show=True)
 
-  def pybuilds(self) -> str:
+  def _pybuilds(self) -> str:
     """ Return when build was last built """
     if not os.path.exists(self.wheel): return "Not built!"
     o = os.path.getmtime(self.wheel)
@@ -221,16 +238,20 @@ __version__ = version("{name}")
       print(f"ERROR: cannot find source path {p}")
       os._exit(1)
     self.init_dot_py()
-    return super()._status()+[self.pybuilds()]
+    return super()._status()+[self._pybuilds()]
 
   @classmethod
   def _main(cls,ap:argparse.ArgumentParser):
     super()._main(ap)
-    cls._add_argument(ap,'package', help="Package for pyadd, pyremove, pyupdate", cmds=["pyadd"])
-    cls._add_argument(ap,'package', help="Package for pyadd, pyremove, pyupdate", cmds=["pyremove"])
-    cls._add_argument(ap,'package', help="Package for pyadd, pyremove, pyupdate", cmds=["pyupdate"])
-    cls._add_argument(ap,'package', help="Package for pyadd, pyremove, pyupdate", cmds=["pygetpackagedetails"])
+    cls._add_argument(ap,'package', help="Package for pyadd, pyremove, pyupdate",
+                      cmds=["pyadd","pyremove","pyupdate","pygetpackagedetails"])
     cls._add_argument(ap,'path', help="Path",cmds=["pyadd"],optional=True)
+    cls._add_argument(ap,'pj', help="Path",
+                      cmds=["pyproject_dot_toml","pyinit_dot_py_path",
+                            "init_dot_py","pygetpackagedetails","pyinstall",
+                            "pyuninstall","pyupdateminor","pyupdatemajor",
+                            "pysyncvenv","pybuild", "pytest"],
+                      optional=True)
 
 if __name__ == "__main__":
   PyMake.main()

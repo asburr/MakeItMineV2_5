@@ -92,7 +92,7 @@ class GtMake(Make):
         
   def gtignore(self,pj:str=None) -> None:
     """ Create or append to .gitignore in current working directory. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     self._gtignore()
 
   def gtignorefile(self,file:str,pj:str=None) -> None:
@@ -100,7 +100,7 @@ class GtMake(Make):
     if not os.path.exist(file):
       print(f"ERROR: No such file {file}")
       os._exit(1)
-    self.setcwd(pj)
+    self._setcwd(pj)
     filename = os.path.basename(file)
     if self._grep(self.gitignore,filename):
       print(f"INFO: {filename} in {self.gitignore}")
@@ -113,7 +113,7 @@ class GtMake(Make):
 
   def gtlocalbranch(self,pj:str=None) -> str:
     """ Name of the local branch """
-    self.setcwd(pj)
+    self._setcwd(pj)
     return self._gtlocalbranch()
 
   def gtclone(self,url:str,pj:str=None) -> None:
@@ -129,7 +129,7 @@ class GtMake(Make):
 
   def gtbranch(self,branch:str,pj:str=None) -> None:
     """ Switch to a branch. Create branch locally if it does not exist. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     localbranch = self._gtlocalbranch()
     if localbranch == branch:
       print(f"already on {branch}")
@@ -155,7 +155,7 @@ class GtMake(Make):
 
   def gttrackingremotebranch(self,pj:str=None) -> bool:
     """ Does localbranch track a remote branch? """
-    self.setcwd(pj)
+    self._setcwd(pj)
     return self._gttrackingremotebranch()
 
   def _gtpush(self) -> None:
@@ -173,7 +173,7 @@ class GtMake(Make):
 
   def gtpush(self,pj:str=None) -> None:
     """ Commit and push to remote branch """
-    self.setcwd(pj)
+    self._setcwd(pj)
     self._gtpush()
 
   def _gtrelease(self) -> None:
@@ -202,7 +202,7 @@ class GtMake(Make):
 
   def gtrebasemain(self,pj:str=None) ->  None:
     """ TO TEST: rebase local branch with new changes on main. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     status = self._cmd(["git","status"],show=True)
     branch = self._gtlocalbranch()
     if [x for x in status if "interactive rebase in progress" in x]:
@@ -226,7 +226,7 @@ class GtMake(Make):
 
   def gtrebaseremote(self,pj:str=None) ->  None:
     """ TO TEST: rebase local branch with new changes on remote branch. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     status = self._cmd(["git","status"],show=True)
     if [x for x in status if "interactive rebase in progress" in x]:
       print("ERROR gtrebasemain in progress")
@@ -238,7 +238,7 @@ class GtMake(Make):
 
   def gtadd(self,pj:str=None) -> str:
     """ Add gtuntrackedfiles to git. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     files = self.gtuntrackedfiles()
     if files: self._cmd(["git","add"]+files.split(os.linesep),show=True)
     files = self.gtunstagedfiles()
@@ -248,7 +248,7 @@ class GtMake(Make):
     """ Create a Git repository from the current working directory.
         Asks the user for the URL for the remote repo.
     """
-    self.setcwd(pj)
+    self._setcwd(pj)
     status = self._cmd(["git","status"],show=True,fail=False)
     if not self._substrin("fatal: not a git repository",status):
       print("Already a git project")
@@ -262,7 +262,7 @@ class GtMake(Make):
 
   def gtsetremote(self,url:str,pj:str=None) -> None:
     """ Setup the remote URL for a newly created local project. """
-    self.setcwd(pj)
+    self._setcwd(pj)
     for u in self._cmd(["git","remote","get-url","origin","--all"],show=True):
       if u != url:
         print(f"different url in .git/config please edit to delete the url {u}")
