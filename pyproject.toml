@@ -1,6 +1,6 @@
 [project]
 name = "makeitminev2_5"
-version = "0.1.1"
+version = "0.0.1"
 description = "Project build tools"
 authors = [
     {name = "asburr",email = "asburr@hotmail.com"}
@@ -11,9 +11,12 @@ dependencies = [
    "texttable",
    "pyinstaller"
 ]
-dev = [
-]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+test = [
+    "spyder-kernels (==3.1)"
+]

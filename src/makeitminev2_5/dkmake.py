@@ -3,9 +3,10 @@ import sys
 import re
 import argparse
 from makeitminev2_5.make import Make
+from makeitminev2_5.makeutils import MakeUtils
 
 
-class DkMake(Make):
+class DkMake(Make,MakeUtils):
   """ Platform independent recipies for a Makefile supporting a Docker projects.
   """
 
@@ -59,12 +60,12 @@ __pycache/
 download/
 """)
 
-  def dkcheck(self,show=True) -> None:
+  def dkcheck(self,_show:bool=True) -> None:
     """ Check if docker is installed """
-    if not self._cmd(["which","docker"],show=show):
+    if not self._cmd(["which","docker"],_show=_show):
       print("docker is not installed. apt update; apt-get install docker.io; sudo usermod -aG docker ${USER}")
       sys.exit(1)
-    if "docker" not in self._cmdstr(["groups"],show=show):
+    if "docker" not in self._cmdstr(["groups"],_show=_show):
       print("user is not in the docker group. sudo usermod -aG docker ${USER}; login again!!")
       sys.exit(1)
 
@@ -89,9 +90,9 @@ download/
         cmd.append("--secret")
         cmd.append(s)
       cmd += ["--no-cache","-t",f"{name}:{version}","-f",self.dkf,"."]
-      self._cmd(cmd,show=True)
+      self._cmd(cmd,_show=True)
     else:
-      self._cmd(["docker","build","--no-cache","-t",f"{name}:{version}","-f",self.dkf,"."],show=True)
+      self._cmd(["docker","build","--no-cache","-t",f"{name}:{version}","-f",self.dkf,"."],_show=True)
     self._touch(os.path.join("docker","dkbuild"))
 
   def _run_release_env(self) -> None:
@@ -123,14 +124,14 @@ download/
       return
     self._dkrun_release_env()
     try:
-      self._cmd(["docker","stop",container_name],show=True)
-      self._cmd(["docker","rm",container_name],show=True)
+      self._cmd(["docker","stop",container_name],_show=True)
+      self._cmd(["docker","rm",container_name],_show=True)
     except:
       pass
     self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkr,
-                           "run","orphans","--name",container_name,"-it",service,"/bin/bash"],show=True)
-    self._cmd(["docker","stop",container_name],show=True)
-    self._cmd(["docker","rm",container_name],show=True)
+                           "run","orphans","--name",container_name,"-it",service,"/bin/bash"],_show=True)
+    self._cmd(["docker","stop",container_name],_show=True)
+    self._cmd(["docker","rm",container_name],_show=True)
 
   def dkpull(self) -> None:
     """ Download images in release.env, PULL_* """ 
@@ -150,11 +151,11 @@ download/
             print(f'{p2} missing {name}=<image>')
             return
           tag = m.group(1)
-          if self._cmd(["docker","images","-q",tag],show=True):
+          if self._cmd(["docker","images","-q",tag],_show=True):
             print(f"Image {tag} already present, wont attemp to repull the remote image")
           else:
-            self._cmd(["docker","pull",image],show=True)
-            self._cmd(["tag",image,tag],show=True)
+            self._cmd(["docker","pull",image],_show=True)
+            self._cmd(["tag",image,tag],_show=True)
 
   def dkup(self) -> None:
     """ Run the services in example/docker-compose.yml """
@@ -163,7 +164,7 @@ download/
       return
     self._dkrun_release_env()
     self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
-                "up","--detach"],show=True)
+                "up","--detach"],_show=True)
 
   def dkdown(self) -> None:
     """ Stop the services in docker-compose """
@@ -171,29 +172,29 @@ download/
       print(f"{self.dkdc} does not exist")
       return
     self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
-                "down"],show=True)
-    self._cmd(["docker","network","prune","-f"],show=True)
+                "down"],_show=True)
+    self._cmd(["docker","network","prune","-f"],_show=True)
 
-  def dkimages(self,show:bool=False) -> str:
+  def dkimages(self,_show:bool=False) -> str:
     """ Detect prod or dev images. """
     name = self.name()
     version = self.version()
-    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],show=show)
-    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],show=show)
+    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],_show=_show)
+    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],_show=_show)
     return ("yes/prod" if prod else "no/prod") + " " + ("yes/dev" if dev else "no/dev")
 
-  def _status_align(self) -> list:
+  def _work_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
-    return super()._status_align()+["c"]
+    return super()._work_align()+["c"]
 
-  def _statusTitles(self) -> list:
-    """ Titles for status """
-    return super()._statusTitles()+["dkimages"]
+  def _workTitles(self) -> list:
+    """ Titles for work """
+    return super()._workTitles()+["dkimages\nlocal>local\ndkbuild"]
 
-  def _status(self) -> list:
-    """ Gather project status """
-    self.dkcheck(show=False)
-    return super()._status()+[self.dkimages(show=False)]
+  def _work(self) -> list:
+    """ Gather project work """
+    self.dkcheck(_show=False)
+    return super()._work()+[self.dkimages(_show=False)]
 
   def _upversion(self,version:str,oldversion:str) -> str:
     """ Update files with the build version. """

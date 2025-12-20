@@ -1,8 +1,9 @@
 import os
 from makeitminev2_5.make import Make
+from makeitminev2_5.makeutils import MakeUtils
 
 
-class DJMake(Make):
+class DJMake(Make,MakeUtils):
   """ Platform independent recipies for a Makefile supporting a Django project.
   """
 
