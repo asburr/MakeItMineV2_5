@@ -1,6 +1,7 @@
 import inspect
 import argparse
 import os
+import re
 
 
 ap_decorator_doc = """
@@ -31,10 +32,13 @@ def  ap_decorator_func(func,cls):
     cls.subparsers_g = cls.parser_g.add_subparsers(dest="command", help="commands")
     cls.subparser_g = {}
   n = func.__name__
+  doc = func.__doc__
+  if not doc: return
   p = cls.subparser_g.get(n,None)
   if p:
     raise Exception(f"{func.__name__} already has an subparser")
-  p = cls.subparsers_g.add_parser(n,help=func.__doc__,description=func.__doc__)
+  description=re.sub("\n\s*:param .*","",doc) if doc else ""
+  p = cls.subparsers_g.add_parser(n,help=doc,description=description)
   cls.subparser_g[n] = p
   p.set_defaults(func=func)
   params = {k:v for k,v in inspect.signature(func).parameters.items()
@@ -42,6 +46,9 @@ def  ap_decorator_func(func,cls):
             }
   for name, param in params.items():
     if name.startswith("_"): continue
+    m=re.search(f".*:param {name}: (.*)$",doc,flags=re.MULTILINE)
+    pdoc = ""
+    if m: pdoc = m.group(1)
     type_hint = param.annotation
     if type_hint is inspect.Parameter.empty:
       raise Exception(f"ERROR: Missing type hint for {n}({name})")
@@ -50,8 +57,7 @@ def  ap_decorator_func(func,cls):
       raise Exception(f"ERROR: no support for {n}({name}:{type_hint})")
     if param.default is not inspect.Parameter.empty:
       name = f"--{name}" # Default value means parameter is optional.
-    p.add_argument(name,**kwargs)
-
+    p.add_argument(name,help=pdoc,**kwargs)
 
 class ap_decorator_class:
     f"""

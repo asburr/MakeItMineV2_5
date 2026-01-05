@@ -3,19 +3,22 @@ import sys
 import re
 import argparse
 from makeitminev2_5.make import Make
-from makeitminev2_5.makeutils import MakeUtils
 
 
-class DkMake(Make,MakeUtils):
+class DkMake(Make):
   """ Platform independent recipies for a Makefile supporting a Docker projects.
   """
+
+  def _ignorepaths(self) -> list:
+    """ List of visible paths to ignore. """
+    return super()._ignorepaths() + ["dkrun_release.env"]
 
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.dkf = os.path.join("docker","Dockerfile")
-    self.dkdc = os.path.join("example","docker-compose.yml")
-    self.dkr = os.path.join("example","release.env")
-    self.dkdr = os.path.join("example","dkrun_release.env")
+    self.dkdc = "compose.yaml"
+    self.dkr = "release.env"
+    self.dkdr = "dkrun_release.env"
 
   def _files(self) -> list:
     """ Perminant files that can be created by this class. """
@@ -28,11 +31,11 @@ class DkMake(Make,MakeUtils):
     if os.path.exists(p):
       print(f"{p} exists, wont recreate")
       return
-    name = self.projectName()
+    name = self.name()
     if not name:
       print("No name in pyproject.toml, add name=<name> to [project]")
       return
-    version=self.projectVersion()
+    version=self.version()
     if not version:
       print("No version in pyproject.toml, add version=0.0.0 to [project]")
       return
@@ -68,43 +71,103 @@ download/
     if "docker" not in self._cmdstr(["groups"],_show=_show):
       print("user is not in the docker group. sudo usermod -aG docker ${USER}; login again!!")
       sys.exit(1)
+    r = self._cmdstr(["docker","buildx","version"],fail=False,_show=_show,stderr=True)
+    if "unknown command" in r:
+      print("docker buildx is not installed. sudo apt-get install docker-buildx")
+      sys.exit(1)
+    if not self._cmd(["which","docker","compose"],_show=_show):
+      print("docker compose is not installed. apt update; apt-get install docker-compose-plugin")
+      print("""
+Hint:
 
-  def dkbuild(self,secret:str) -> None:
-    """ Build container using docker/Dockerfile. Optional secret is semicolon separated of id-<id>,src=<path> """
+1 Update your package index and install prerequisites:  
+  sudo apt-get update
+  sudo apt-get install ca-certificates curl gnupg
+2 Add Docker’s official GPG key:
+  sudo install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  sudo chmod a+r /etc/apt/keyrings/docker.gpg
+3 Set up the repository:
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+4 Install the Compose Plugin:
+  sudo apt-get update
+  sudo apt-get install docker-compose-plugin
+""")
+      print("Note: must 'Add Docker’s official GPG key' and 'Set up the repository' before installing the plugin")
+      sys.exit(1)
+
+  def dkbuild(self,secret:str=None) -> None:
+    """ Build container using docker/Dockerfile.
+      :param secret: semicolon separated of id=<id>,src=<path>
+    """
     touchfile=os.path.join("docker","dkbuild")
-    if not self._rebuild_target(touchfile,[self.dkf]): return
+    # TODO; how to add python package deps.
+    if not self._rebuild_target(touchfile, [self.dkf]): return
     self.dkcheck()
-    name = self.projectname()
-    version = self.projectversion()
+    name = self.name()
+    version = self.version()
+    cmd = ["docker","build",]
+    with open(self.dkf,"r") as f:
+      for line in f:
+        m = re.search('--mount=type=secret,id=(.*),target=',line)
+        if m:
+          id = m.group(1)
+          if not secret or f"id={id}," not in secret:
+            print(f"--secret id={id},src=<path> - see {self.dkf}")
+            sys.exit(1)
     if secret:
-      with open(self.dkf,"r") as f:
-        for line in f:
-          m = re.search('-mount=type=secret,id=(.*),target='.line)
-          if m:
-            id = m.group(1)
-            if f'id{id}," not in secret':
-              print(f"secret {id} is required by {self.dkf}")
-              sys.exit(1)
-      cmd = ["docker","build"]
       for s in secret.split(";"):
         cmd.append("--secret")
         cmd.append(s)
-      cmd += ["--no-cache","-t",f"{name}:{version}","-f",self.dkf,"."]
-      self._cmd(cmd,_show=True)
-    else:
-      self._cmd(["docker","build","--no-cache","-t",f"{name}:{version}","-f",self.dkf,"."],_show=True)
-    self._touch(os.path.join("docker","dkbuild"))
+    cmd += ["-f",self.dkf]
+    self._cmdInteractive(cmd + [
+      "-t",f"{name}_prod:{version}",
+      "--progress=plain",
+      "--target","production","."],_show=True)
+    self._cmdInteractive(cmd + [
+      "-t",f"{name}_dev:{version}",
+      "--progress=plain",
+      "--build-context","projects=../../projects",
+      "--target","development","."
+      ],_show=True)
+    # Removes all stopped containers, all networks not used by at least one
+    # container, all dangling images (untagged image layers that are no
+    # longer used by any images), and unused build cache. 
+    self._cmdInteractive([
+      "docker",
+      "system",
+      "prune",
+      "-f"
+      ],_show=True)
+    # Remove unused build cache
+    self._cmdInteractive([
+      "docker",
+      "builder",
+      "prune",
+      "-f"
+      ],_show=True)
+    self._touch(touchfile)
 
-  def _run_release_env(self) -> None:
+  def _dkrun_release_env(self) -> None:
+    """ Replace variables in release.env. """
     with open(self.dkr,"r") as r, open(self.dkdr,"w") as w:
       for line in r:
         if "USERID" in line:
           w.write(f"USERID={os.getuid()}{os.linesep}")
         elif "GROUPID" in line:
           w.write(f"GROUPID={os.getresgid()[0]}{os.linesep}")
+        elif "_DATA" in line:
+          # TODO; recreate directory.
+          pass
+        elif "_FILE" in line:
+          # TODO; ??
+          pass
         else:
           w.write(line)
-    
+
   def dkrun(self, service:str) -> None:
     """ Run a service in example/docker-compose.yml """
     if not os.path.exists(self.dkdc):
@@ -163,7 +226,7 @@ download/
       print(f"{self.dkdc} does not exist")
       return
     self._dkrun_release_env()
-    self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "up","--detach"],_show=True)
 
   def dkdown(self) -> None:
@@ -171,16 +234,26 @@ download/
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
+    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "down"],_show=True)
+    self._cmdInteractive(["docker","network","prune","-f"],_show=True)
+
+  def dkreup(self) -> None:
+    """ Simulates a restart of the services with persistent state. """
+    if not os.path.exists(self.dkdc):
+      print(f"{self.dkdc} does not exist")
+      return
     self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "down"],_show=True)
-    self._cmd(["docker","network","prune","-f"],_show=True)
+    self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "up","--detach"],_show=True)
 
   def dkimages(self,_show:bool=False) -> str:
     """ Detect prod or dev images. """
     name = self.name()
     version = self.version()
-    prod = self._cmd(["docker","images","-q",f"{name}_editable:{version}"],_show=_show)
-    dev = self._cmd(["docker","images","-q",f"{name}:{version}"],_show=_show)
+    prod = self._cmd(["docker","images","-q",f"{name}_dev:{version}"],_show=_show)
+    dev = self._cmd(["docker","images","-q",f"{name}_prod:{version}"],_show=_show)
     return ("yes/prod" if prod else "no/prod") + " " + ("yes/dev" if dev else "no/dev")
 
   def _work_align(self) -> list:
@@ -194,7 +267,9 @@ download/
   def _work(self) -> list:
     """ Gather project work """
     self.dkcheck(_show=False)
-    return super()._work()+[self.dkimages(_show=False)]
+    images = self.dkimages(_show=False)
+    images = "" if images == "yes/prod yes/dev" else images
+    return super()._work()+[images]
 
   def _upversion(self,version:str,oldversion:str) -> str:
     """ Update files with the build version. """

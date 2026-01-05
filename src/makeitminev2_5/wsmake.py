@@ -1,18 +1,47 @@
 import os
 import json
+from pathlib import Path
 from typing import Any
 from makeitminev2_5.make import Make
-from makeitminev2_5.makeutils import MakeUtils
 from texttable import Texttable
 
 
-class WSMake(Make,MakeUtils):
+class WSMake(Make):
   """ Workspace work. """
 
-  def _newfile(self,file:str) -> None:
-    super().newfile(file)
+  def wsset(self,ws:str) -> None:
+    """ Select a workspace. Will create the workspace if is does not exist.
+    :param ws: path to workspace.
+    """
+    if not os.path.exists(ws):
+      with open(ws,"w") as f: json.dump({},f)
+      print(f"info: created {ws}")
+    else:
+      try:
+        with open(ws,"r") as f:
+          self._wsload(json.load(f))
+      except Exception as e:
+        print(f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}")
+        os._exit(1)
+    self._addpreference(key="ws",value=ws)
 
-  def _wsrm(self,ws:str,pj:str,path:str) -> None:
+  def wspjpath(self,pj:str) -> str:
+    ws = self._getpreference(key="ws")
+    with open(ws,"r") as f:
+      return self._wsload(json.load(f)).get(pj,None)
+
+  def _ignorepaths(self) -> list:
+    """ List of visible paths to ignore. """
+    return super()._ignorepaths()
+
+  def _checkfile(self,file:str) -> bool:
+    return super()._checkfile(file)
+
+  def _newfile(self,file:str) -> None:
+    super()._newfile(file)
+
+  def _wsrm(self,pj:str,path:str) -> None:
+    ws = self._getpreference(key="ws")
     super()._wsrm(ws,pj,path)
 
   def _build(self) -> None:
@@ -41,56 +70,65 @@ class WSMake(Make,MakeUtils):
 
   ### End framework required implementations.
  
-  def __init__(self):
-    super().__init__()
+  def __init__(self,**kwargs):
+    super().__init__(**kwargs)
     self.default_ws = "ws.json"
 
-  def ws(self,ws:str=None) -> None:
-    """ Show workspace. """
-    if not ws: ws = self.default_ws
-    if os.path.exists(ws):
-      with open(ws,"r") as f:
-        j = json.load(f)
-      if not j:
-        print(f"info: {ws} is empty, see wsadd")
-        return
-      name = self.name()
-      table = Texttable(max_width=os.get_terminal_size().columns)
-      titles = ["workspace","project","path"]
-      body = [[name+"/"+ws,k,v] for k,v in j.items()]
-      table.set_cols_align(["l","l","l"])
-      table.add_rows([titles] + body)
-      print(table.draw())
-      return
-
-  def wsadd(self,pj:str=None,path:str=None,ws:str=None) -> None:
-    """ Add project to workspace. Will create the workspace if does not exist.
-    Optional project name (--pj) and path (--path), defaults to cwd.
-    Optional workspace (--ws), defaults to cwd/ws.json"""
-    if path and not os.path.exists(path):
-      print(f"ERROR: cannot find project path {path}")
+  def _getws(self) -> str:
+    ws = self.getpreference("ws")
+    if not ws:
+      print("ERROR: please use wsset to select or create a workspace")
       os._exit(1)
-    if not ws: ws = self.default_ws
-    if not os.path.exists(ws):
-      with open(ws,"w") as f: json.dump({},f)
-      print(f"info: created {ws}")
-      self._newfile(ws)
-    with open(ws,"r") as f: j = json.load(f)
-    if not pj: pj = self.name()
+    return ws
+
+  def ws(self) -> None:
+    """ Show workspace.
+    """
+    ws = self._getws()
+    with open(ws,"r") as f:
+      j = self._wsload(json.load(f))
+    if not j:
+      print(f"info: {ws} is empty, see wsadd")
+      return
+    table = Texttable(max_width=os.get_terminal_size().columns)
+    titles = ["workspace","project","path"]
+    body = [[ws,k,v] for k,v in j.items()]
+    table.set_cols_align(["l","l","l"])
+    table.add_rows([titles] + body)
+    print(table.draw())
+    return
+
+  def _wsload(self,j:dict) -> dict:
+      return {k:v.replace("${HOME}",str(Path.home())) for k,v in j.items()}
+
+  def _wsdump(self,j:dict) -> dict:
+      return {k:v.replace(str(Path.home()),"${HOME}") for k,v in j.items()}
+
+  def wsadd(self,pj:str=None,path:str=None) -> None:
+    """ Add project to workspace. Will create the workspace if does not exist.
+    :param pj: project name, defaults to current directory.
+    :param path: path to the root of the project, defaults to current directory.
+    """
     if not path:
       path = self.cwd
+    if not os.path.exists(path):
+      print(f"ERROR: cannot find project at {path}")
+      os._exit(1)
+    ws = self._getws()
+    with open(ws,"r") as f:
+      j = self._wsload(json.load(f))
+    if not pj: pj = self.name()
     if pj not in j:
       j[pj] = path
-      print(f"info: adding {pj}:{path}")
-      with open(ws,"w") as f: json.dump(j,f)
+      print(f"info: adding {pj}:{j[pj]}")
+      with open(ws,"w") as f: json.dump(self._wsdump(j),f)
 
-  def wsrm(self,pj:str=None,ws:str=None) -> None:
-    """ Remove project from a workspace. """
-    if not ws: ws = self.default_ws
-    if not os.path.exists(ws):
-      print(f"ERROR: cannot find path {ws}")
-      os._exit(1)
-    with open(ws,"r") as f: j = json.load(f)
+  def wsrm(self,pj:str=None) -> None:
+    """ Remove project from a workspace.
+    :param pj: project name, defaults to current directory.
+    """
+    ws = self._getws()
+    with open(ws,"r") as f: j = self._wsload(json.load(f))
     if not pj:
       pj = next(pj for pj,path in j.items() if path == self.cwd)
       if not pj:
@@ -101,15 +139,14 @@ class WSMake(Make,MakeUtils):
       print(f"ERROR: {pj} is not in {ws}")
       os._exit(1)
     del j[pj]
-    with open(ws,"w") as f: json.dump(j,f)
+    with open(ws,"w") as f: json.dump(self._wsdump(j),f)
 
-  def wswork(self,pj:str=None,ws:str=None) -> None:
-    """ Work remaining in the workflow for the projects in this workspace. """
-    if not ws: ws = self.default_ws
-    if not os.path.exists(ws):
-      print("ERROR could not find a workspace")
-      os._exit(1)
-    with open(ws,"r") as f: j=json.load(f)
+  def wswork(self,pj:str=None) -> None:
+    """ Work remaining in the workflow for the projects in this workspace.
+    :param pj: project name, defaults to current directory.
+    """
+    ws = self._getws()
+    with open(ws,"r") as f: j=self._wsload(json.load(f))
     if not j:
       print(f"ERROR: No projects in {ws}; see wsadd")
       os._exit(1)
@@ -133,19 +170,16 @@ class WSMake(Make,MakeUtils):
     table.add_rows(t)
     print(table.draw())
 
-  def wsrun(self,cmd:str,pj:str=None,ws:str=None,*args:list[Any],**kwargs:dict[Any,Any]) -> any:
+  def wsrun(self,cmd:str,pj:str=None,*args:list[Any],**kwargs:dict[Any,Any]) -> any:
     """ Run a command without arguments for all of the projects in the workspace.
-    ---pj to limit the run to the project named by --pj.
-    --ws to specify a workspace named by --ws, ./ws.json is the default.
     args positional arguments for the command being run.
     kwargs key=value arguments for the command being run.
+    :param cmd: command to run over all of the projects in the workspace.
+    :param pj: project name, defaults to current directory.
     """
     r = None
-    if not ws: ws = self.default_ws
-    if not os.path.exists(ws):
-      print("ERROR could not find a workspace")
-      os._exit(1)
-    with open(ws,"r") as f: j=json.load(f)
+    ws = self._getws()
+    with open(ws,"r") as f: j=self._wsload(json.load(f))
     if not j:
       print(f"ERROR: No projects in {ws}; see wsadd")
       os._exit(1)
@@ -160,4 +194,3 @@ class WSMake(Make,MakeUtils):
       ret = f()
       r = r + ret if r else ret
     return r
-

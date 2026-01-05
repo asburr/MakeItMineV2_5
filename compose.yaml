@@ -1,0 +1,15 @@
+name: makeitminev2_5
+
+services:
+  gitserver:
+    image: ${GIT_IMAGE}
+    network_mode: host
+    command: ["tail","-f","/dev/null"]
+    volumes:
+     # /projects was temporarily mounted in the Dockerfile, here we
+     # remount /projects. Bind obscures (hides) the local copy of the
+     # projects with the host projects directory.
+     - type: bind
+       source: ${HOME}/projects
+       target: /projects
+       read_only: false

@@ -6,7 +6,8 @@ authors = [
     {name = "asburr",email = "asburr@hotmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
+# main group - packages installed from pypi and never from a local path.
 dependencies = [
    "texttable",
    "pyinstaller"
@@ -17,6 +18,23 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-test = [
-    "spyder-kernels (==3.1)"
+# dev group - packages for pytest and pyintegrationtest and installed from pypi.
+dev = [
+  {include-group = "main"},
+  "pylint (>=4.0.4,<5.0.0)",
+  "pytest (>=9.0.2,<10.0.0)",
+  "ruff (>=0.14.10,<0.15.0)",
+  "spyder-kernels (==3.1)"
+]
+# prod group - inhouse packages used by CI/CD job to install packages from pypi.
+prod = [
+  {include-group = "main"}
+]
+# wsdev group - inhouse packages used in development to install packages as editable from local path.
+wsdev = [
+  {include-group = "dev"}
+]
+# wsprod group - inhouse packages used in development to install wheels from local path to test the production install.
+wsprod = [
+  {include-group = "main"}
 ]

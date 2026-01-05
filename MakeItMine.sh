@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/bin/bash
+"exec" "poetry" "run" "python" "$0" "$@"
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))

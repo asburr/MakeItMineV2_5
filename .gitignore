@@ -5,3 +5,4 @@ dist/
 venv/
 prod_requirements.txt
 dev_requirements.txt
+dkrun_release.env

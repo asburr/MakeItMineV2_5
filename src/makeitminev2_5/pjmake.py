@@ -7,8 +7,12 @@ from texttable import Texttable
 import os
 
 
-class PjMake(WSMake,GtMake,PyMake,DJMake,DkMake):
+class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
   """ Project make using other makes. """
+
+  def _ignorepaths(self) -> list:
+    """ List of visible paths to ignore. """
+    return super()._ignorepaths()
 
   def build(self) -> None:
     """ build """

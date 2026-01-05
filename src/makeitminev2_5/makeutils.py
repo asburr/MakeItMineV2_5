@@ -7,12 +7,19 @@ import subprocess
 class MakeUtils():
   """ Utils """
 
-  def _touch(self,p:str) -> None:
-    """ util: Touches a file. """
-    with open(p,"a"):
-      pass
+  def __init__(self,**kwargs):
+    self.cwd = os.getcwd()
+    self.home = Path.home()
+    self.bv = "BUILD_VERSION.txt"
+    self.readme = "README.md"
 
-  def _sed(self,fn:str,pattern:str,s:str) -> None:
+  @classmethod
+  def _touch(cls,p:str) -> None:
+    """ util: Touches a file. """
+    Path(p).touch()
+
+  @classmethod
+  def _sed(cls,fn:str,pattern:str,s:str) -> None:
     """ Util: Change pattern to s if s not already in line that matches pattern. """
     changed=False
     hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
@@ -31,7 +38,8 @@ class MakeUtils():
     else:
       os.rename(hfn,fn)
 
-  def _grep(self,fn:str,pattern:str) -> str:
+  @classmethod
+  def _grep(cls,fn:str,pattern:str) -> str:
     """ util: Return lines in file that match pattern. """
     retval = []
     with open(fn,"r") as i:
@@ -40,12 +48,14 @@ class MakeUtils():
           retval.append(l)
     return "\n".join(retval)
 
-  def _append(self,fn:str,line:str) -> None:
+  @classmethod
+  def _append(cls,fn:str,line:str) -> None:
     """ util: append line to file. """
     with open(fn,"a") as f:
       f.write(line+os.linesep)
 
-  def _cmd(self,cmd:list, _show:bool=False, fail:bool=True,stderr:bool=False) -> list:
+  @classmethod
+  def _cmd(cls,cmd:list, _show:bool=False, fail:bool=True,stderr:bool=False) -> list:
     """ util: Non-interactive stdin and stdout, this command captures stdin and stdout returning as a list of lines. """
     if _show: print(" ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -53,43 +63,53 @@ class MakeUtils():
         if fail:
           print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}")
           os._exit(1)
-    e = proc.stderr.strip().split(os.linesep)
-    if not e[0]: e=[] # "".split(os.linesep) => ['']
-    o = proc.stdout.strip().split(os.linesep)
-    if not o[0]: o=[] # "".split(os.linesep) => ['']
+    e = proc.stderr.strip()
+    e = e.split(os.linesep) if e else []
+    o = proc.stdout.strip()
+    o = o.split(os.linesep) if o else []
     if e and stderr:
         return e + o
     return o
 
-  def _cmdstr(self,cmd:list, _show:bool=False, fail:bool=True) -> str:
+  @classmethod
+  def _cmdstr(cls,cmd:list, _show:bool=False, fail:bool=True,stderr:bool=False) -> str:
     """ util: return stdout and stderr as a whole string. """
-    a=self._cmd(cmd,_show,fail)
+    a=cls._cmd(cmd,_show,fail,stderr)
     if len(a): return os.linesep.join(a)
     return None
 
-  def _substrin(self,s:str,a:list) -> bool:
+  @classmethod
+  def _substring(cls,s:str,a:list) -> bool:
     """ Substring in list of strings. """
     return [x for x in a if s in x] != []
 
-  def _cmdInteractive(self,cmd:list,_show:bool=False) -> None:
+  @classmethod
+  def _cmdInteractive(cls,cmd:list,fail:bool=True,_show:bool=False) -> None:
     """ util: Interactive stdin and stdout, this command outputs to the user and takes input from the user. """
     if _show: print(" ".join(cmd))
-    subprocess.run(cmd)
+    proc = subprocess.run(cmd)
+    if proc.returncode != 0:
+        if fail:
+          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}")
+          os._exit(1)
 
-  def _newermtime(self,mtime:float,p:str) -> bool:
+  @classmethod
+  def _newermtime(cls,mtime:float,p:str) -> bool:
     """ anything in p including subdirs that is newer than target """
-    if os.path.getmtime(p) > mtime:
+    t = os.path.getmtime(p)
+    if t > mtime:
       return True
     if os.path.isdir(p):
         for root, dirs, files in os.walk(p):
           if [x for x in files if os.path.getmtime(os.path.join(root,x)) > mtime]:
             return True
           for dir in dirs:
-            if self._newermtime(mtime,os.path.join(root,dir)):
+            if cls._newermtime(mtime,os.path.join(root,dir)):
               return True
     return False
 
-  def _rebuild_target(self,target:str,dependencies: list) -> bool:
+  @classmethod
+  def _rebuild_target(cls,target:str,dependencies: list) -> bool:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
     if not os.path.exists(target):
       print(f"{target} does not exist rebuilding")
@@ -97,19 +117,14 @@ class MakeUtils():
     mtime = os.path.getmtime(target)
     for dependency in dependencies:
       if not os.path.exists(dependency):
-        # Dependency does not exist assuming it will be built when rebuilding target.
+        print(f"{target} is out of date, {dependency} does not exist assuming it will be built when rebuilding target.")
         return True
-      if self._newermtime(mtime,dependency):
-        # target is older than dependency and needs rebuilding
+      if cls._newermtime(mtime,dependency):
+        print(f"{target} is out of date, {dependency} is older than dependency and needs rebuilding")
         return True
-    # target is up to date
-    return False
 
-  def __init__(self):
-    self.cwd = os.getcwd()
-    self.home = Path.home()
-    self.bv = "BUILD_VERSION.txt"
-    self.readme = "README.md"
+    print(f'{target} is up to date, dependencies {",".join(dependencies)}')
+    return False
 
   def _setcwdX(self,pj:str=None) -> None:
     """ Util: change dir to pj or cwd """

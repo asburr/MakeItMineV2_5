@@ -1,14 +1,16 @@
-import argparse
 import os
 import datetime
 from makeitminev2_5.make import Make
-from makeitminev2_5.makeutils import MakeUtils
 
 
-class GtMake(Make,MakeUtils):
+class GtMake(Make):
   """ Platform independent recipies for a Makefile supporting GIT. Trunk
   based developement is working on temporary branches directly off main.
   """
+
+  def _ignorepaths(self) -> list:
+    """ List of visible paths to ignore. """
+    return super()._ignorepaths()
 
   def _newfile(self,file:str) -> None:
     """ Created a new file that needs to be added to the project.
@@ -17,6 +19,9 @@ class GtMake(Make,MakeUtils):
       self._cmd(["git","add",file],_show=True)
     except Exception as e:
       print(f"Warning could not add {file} to git in {self.cwd} due to {e}")
+
+  def _checkfile(self,file:str) -> bool:
+    return super()._checkfile(file)
 
   def _build(self,pj:str) -> None:
     """ build the project. """
@@ -82,7 +87,7 @@ class GtMake(Make,MakeUtils):
 
   def gtignore(self) -> None:
     """ Create or append to .gitignore in current working directory. """
-    l = [".*/", "__pycache__/", "*.py[cod]","dist/","venv/"]    
+    l = [f"{x}/" for x in self.ignorepaths()] + [".*/", "*.py[cod]"]
     if not os.path.exists(self.gitignore):
       print("creating {self.gitignore}")
       with open(self.gitignore,"w") as f:
@@ -230,19 +235,32 @@ class GtMake(Make,MakeUtils):
     # files = self.gtunstagedfiles()
     # if files: self._cmd(["git","add"]+files.split(os.linesep),_show=True)
 
+  def gtremoterepo(self,path:str) -> None:
+    """ Initialize a local path as a REMOTE repo with trunk called "main" and
+    repo is accessible by anybody.
+    THIS IS A REMOTE REPO - Generally a remote repo is hosted on gitlab or
+    github, but here the remote repo is created on the localhost.
+    :param path: path where the remote repo will exist.
+    """
+    os.chdir(path)
+    self._cmd(["git","-C","init","--bare","--initial-branch=main","--shared=all"],_show=True)
+    
   def gtcreate(self,url:str) -> None:
     """ Create a Git repository from the current working directory.
         Asks the user for the URL for the remote repo.
     """
-    work = self._cmd(["git","work"],_show=True,fail=False)
-    if not self._substrin("fatal: not a git repository",work):
-      print("Already a git project")
+    status = self._cmd(["git","status"],_show=True,fail=False)
+    if not self._substring("fatal: not a git repository",status):
+      print(f"warning: {self.cwd} is a git project")
       return
     self.gtignore()
     self._cmdInteractive(["git","init","--initial-branch","main","."],_show=True)
-    self._cmd(["git","add"]+self._files(),_show=True)
     self.gtadd()
-    self._cmd(["git","remote","set-url","--add","origin",url],_show=True)
+    # Before push, must have at least one commit in the local history.
+    self._cmd(["git","commit","-m","initial commit"],_show=True)
+    # Add the path to the repository as a remote, origin being the standard
+    # convention for a remote repo.
+    self._cmd(["git","remote","add","origin",url],_show=True)
     self.gtpush()
 
   def gtsetremote(self,url:str) -> None:
@@ -338,6 +356,7 @@ class GtMake(Make,MakeUtils):
     branch = self.gtlocalbranch()
     a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"{branch}..origin/{branch}"],_show=_show)
     if not a: return f"0/files\n{branch}/br"
+    print(a)
     a=a[-1].split(" ")
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]))
     dd = d.days
@@ -423,5 +442,5 @@ class GtMake(Make,MakeUtils):
     branch = self.gtlocalbranch()
     return self._cmdstr(["git","diff",f"origin/{branch}...{branch}"],_show=_show).strip()
 
-  def gtfetch(self,_show=True) -> None:
-    self._cmd(["git","fetch"],_show=_show)
+  def gtfetch(self,_show=True) -> bool:
+    return self._cmd(["git","fetch"],fail=False,_show=_show)
