@@ -5,6 +5,7 @@ from makeitminev2_5.make import Make
 class DJMake(Make):
   """ Platform independent recipies for a Makefile supporting a Django project.
   """
+
   def _ignorepaths(self) -> list:
     """ List of visible paths to ignore. """
     return super()._ignorepaths()

@@ -10,25 +10,23 @@ class PyMake(Make,MakeUtils):
   """ Platform independent recipies for a Makefile supporting a Python project. """
 
   def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
     return super()._ignorepaths() + ["venv","__pycache__", "dist"]
 
   def _newfile(self,file:str) -> None:
-    super().newfile(file)
+    super()._newfile(file)
 
   def _checkfile(self,file:str) -> bool:
-    r = self._cmd([self.poetry_p,"run","ruff","check","--ignore=E402,F541,E70"],fail=False,_show=True)
-    if r:
-      print(r)
-      return False
-    r = self._cmd([self.poetry_p,"run","pylint","--errors-only","--disable=C,R"],fail=False,_show=True)
-    if r:
-      print(r)
-      return False
+    """ Check Python syntax """
+    if file.endswith(".py"):
+      ruff = self._cmdstr([self.poetry_p,"run","ruff","check","--quiet","--ignore=E402,F541,E70",file],fail=False,_show=True)
+      if ruff: print(ruff)
+      lint = self._cmdstr([self.poetry_p,"run","pylint","--errors-only","--disable=C,R",file],fail=False,_show=True)
+      if lint: print(lint)
+      if ruff or lint:
+        return False
+    if file == "pyproject.toml":
+      self._cmdInteractive([self.poetry_p,"check"],fail=True,_show=True)
     return super()._checkfile(file)
-
-  def _wsrm(self,ws:str,pj:str,path:str) -> None:
-    super()._wsrm(ws,pj,path)
 
   def _build(self) -> None:
     super()._build()
@@ -72,12 +70,12 @@ class PyMake(Make,MakeUtils):
     self.poetry_p = self._cmdstr(["which","poetry"],_show=False)
     if not self.poetry_p:
       raise Exception("Cannot find poetry. Install poetry in a different venv (not this project) using pip install poetry")
-    self.venv = self._cmdstr([self.poetry_p,"env","info","--path"],_show=False)
-    self.python_p = os.path.join(self.venv,"bin","python")
+    self.venv = self._cmdstr([self.poetry_p,"env","info","--path"],fail=False,_show=False)
+    self.python_p = os.path.join(self.venv,"bin","python") if self.venv else ""
     self.src = "src"
     self.toml = "pyproject.toml"
-    self.pye2etest_touchfile = os.path.join("tests","e2e","done")
-    self.pyunittest_touchfile = os.path.join("test","unittest","done")
+    self.pye2etest_touchfile = os.path.join("tests","e2e",".done.touch")
+    self.pyunittest_touchfile = os.path.join("tests","unittest",".done.touch")
     self.download = os.path.join(self.cwd,".download")
     if not os.path.exists(self.download): os.mkdir(self.download)
     self.wheel = os.path.join(self.download,f"{self.name().lower()}-{self.version()}-py3-none-any.whl")
@@ -149,8 +147,8 @@ wsprod = [
         if "__init__.py" == file:
           p=os.path.join(root,file)
           with open(p,"r") as f:
-            for l in f:
-              if re.search('^\s*__version__\s*==',l):
+            for line in f:
+              if re.search('^\s*__version__\s*==',line):
                 if i:
                   print(f"Cannot have two __init__.py both with __version__, please see {i} and {p}")
                 else:
@@ -191,7 +189,7 @@ __version__ = version("{name}")
     """
     self.pysyncvenv() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
-    p = self.wspackage(package) # Look for a local package.
+    p = self.findproject(name=package) # Look for a local package.
     if p:
       # Local package.
       cwd = Path.cwd()
@@ -275,7 +273,7 @@ __version__ = version("{name}")
         [self.toml,"src","docker","example"]):
       return
     self.pysyncvenv()
-    self._cmd([self.poetry_p,"run","pytest","-m","unit"],_show=True)
+    self._cmd([self.poetry_p,"run","pytest","-s","-m","unit"],_show=True)
     self._touch(self.pyunittest_touchfile)
 
   def pye2etest(self) -> None:
@@ -285,7 +283,9 @@ __version__ = version("{name}")
         [self.toml,"src","docker","example"]):
       return
     self.pysyncvenv()
-    self._cmdInteractive([self.poetry_p,"run","pytest","-m","e2e"],_show=True)
+    # -s to show stdout.
+    # -vv stops output being truncated when tests fail and help debugging.
+    self._cmdInteractive([self.poetry_p,"run","pytest","-vv","-s","-m","e2e"],_show=True)
     self._touch(self.pye2etest_touchfile)
 
   def pypackaged(self) -> str:

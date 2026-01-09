@@ -52,20 +52,23 @@ class GtMake(Make):
     
   def _work_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
-    return super()._work_align()+["l","l","l","l","l","l"]
+    return super()._work_align()+["l","l","l","l","l","l","l"]
 
   def _workTitles(self) -> list:
     """ Titles for work """
     return super()._workTitles()+[
+      "gtcreate",
       "gtuntracked\nlocal>local\ngtadd",
       "gtmainahead\nmain>local\ngtrebasemain",
       "gtremoteahead\nremote>local\ngtrebaseremote",
-      "gtuncommitted\nchange>local\ngtpush",
+      "gtuncommitted\nchange>local\ngtdiff, gtpush",
       "gtremotebehind\nlocal>remote\ngtpush",
       "gtmainbehind\nremote>main\ngtrelease"]
 
   def _work(self) -> list:
     """ Gather project work """
+    if not self.gtrepo():
+      return super()._work()+["no repo","","","","","",""]
     self.gtfetch(_show=False)
     untracked = self.gtuntracked(_show=False)
     untracked = "" if untracked == "0/files" else untracked
@@ -76,9 +79,10 @@ class GtMake(Make):
     mainbehind = self.gtmainbehind(_show=False)
     mainbehind = "" if mainbehind == "n/a on main" or mainbehind == "0/files" else mainbehind
     uncommited = self.gtuncommitted()
+    uncommited = "" if uncommited == "0/files" else uncommited
     remotebehind = self.gtremotebehind(_show=False)
     remotebehind = "" if remotebehind == "n/a on main" or remotebehind == "0/files" else remote
-    return super()._work()+[untracked,main,remote,uncommited,remotebehind,mainbehind]
+    return super()._work()+["",untracked,main,remote,uncommited,remotebehind,mainbehind]
 
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
@@ -87,30 +91,29 @@ class GtMake(Make):
 
   def gtignore(self) -> None:
     """ Create or append to .gitignore in current working directory. """
-    l = [f"{x}/" for x in self.ignorepaths()] + [".*/", "*.py[cod]"]
+    paths = [f"{x}/" for x in self.ignorepaths()] + [".*/", "*.py[cod]"]
     if not os.path.exists(self.gitignore):
       print("creating {self.gitignore}")
       with open(self.gitignore,"w") as f:
-        for s in l:
+        for s in paths:
           f.write(f"{s}{os.linesep}")
       return
     with open(self.gitignore,"r") as f:
       for line in f:
         try:
-          l.remove(line.strip())
-        except:
+          paths.remove(line.strip())
+        except Exception:
           pass
     with open(self.gitignore,"a") as f:
-      for s in l:
+      for s in paths:
         print(f"Adding {s} to .gitignore")
         f.write(f"{s}{os.linesep}")
         
-  def gtignorefile(self,file:str,pj:str=None) -> None:
+  def gtignorefile(self,file:str) -> None:
     """ Add file to git ignore. """
-    if not os.path.exist(file):
+    if not os.path.exists(file):
       print(f"ERROR: No such file {file}")
       os._exit(1)
-    self._setcwd(pj)
     filename = os.path.basename(file)
     if self._grep(self.gitignore,filename):
       print(f"INFO: {filename} in {self.gitignore}")
@@ -159,7 +162,11 @@ class GtMake(Make):
 
   def gtpush(self) -> None:
     """ Commit and push to remote branch """
-    if self.gtuncommittedfiles():
+    files = self.gtuncommittedfiles()
+    if files:
+      for file in files.split():
+        if not self.checkfile(file):
+          return
       self._cmdInteractive(["git","commit","-a"],_show=True)
     localbranch = self.gtlocalbranch()
     if not self.gttrackingremotebranch():
@@ -172,7 +179,7 @@ class GtMake(Make):
 
   def gtrelease(self) -> None:
     """ TO TEST: release changes on remote branch into origin/main. """
-    if self.gtlocalchanges():
+    if self.gtuncommittedfiles():
       print("Error, commit local changes before merge")
       return
     branch = self.gtlocalbranch()
@@ -211,7 +218,7 @@ class GtMake(Make):
     if branch == "main":
       print("ERROR use gtrebasemain when on main")
       return
-    if not self.gtmainfiles():
+    if not self.gtmainbehindfiles():
       print(f"Nothing to rebase, {branch} is up to date with main")
       return
     self._cmd(["git","fetch","origin"],_show=True)
@@ -243,15 +250,21 @@ class GtMake(Make):
     :param path: path where the remote repo will exist.
     """
     os.chdir(path)
-    self._cmd(["git","-C","init","--bare","--initial-branch=main","--shared=all"],_show=True)
-    
+    self._cmd(["git","init","--bare","--initial-branch=main","--shared=all"],_show=True)
+
+
+  def gtrepo(self) -> bool:
+    """ Check if current working directory is a git repo. """
+    status = self._cmd(["git","status"],_show=False,fail=False,stderr=True)
+    return not self._substring("fatal: not a git repository",status)
+
   def gtcreate(self,url:str) -> None:
     """ Create a Git repository from the current working directory.
         Asks the user for the URL for the remote repo.
     """
-    status = self._cmd(["git","status"],_show=True,fail=False)
-    if not self._substring("fatal: not a git repository",status):
-      print(f"warning: {self.cwd} is a git project")
+    print(os.getcwd())
+    if not self.gtrepo():
+      print(f"ERROR: {self.cwd} is a git project")
       return
     self.gtignore()
     self._cmdInteractive(["git","init","--initial-branch","main","."],_show=True)
@@ -363,7 +376,7 @@ class GtMake(Make):
     hh = d.seconds//3600
     mm = (d.seconds//60)%60
     remote = a[1].split("/")[-1]
-    cnt = len(self.gtremoteaheeadfiles(_show=False).split(os.linesep))
+    cnt = len(self.gtremoteaheadfiles(_show=False).split(os.linesep))
     return f'{cnt}/files\n{branch}/br\n{remote}/uid\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age'
 
   def gtremoteaheadfiles(self,_show=True) -> str:
@@ -395,13 +408,14 @@ class GtMake(Make):
     return self._cmdstr(["git","ls-files","--modified","--deleted"],_show=_show)
 
   def gtuncommitted(self,_show=True) -> str:
-    """ Uncommitted local changes. """
+    """ Uncommitted local changes; excluding deleted files. """
     branch = self.gtlocalbranch()
     files = self.gtuncommittedfiles(_show=False) + self.gtunstagedfiles(_show=_show)
     if not files: return "0/files"
-    l = [os.path.getmtime(file) for file in files.split(os.linesep) if os.path.exists(file)]
-    cnt = len(l)
-    oldest = min(l)
+    addfiles = [os.path.getmtime(file) for file in files.split(os.linesep) if os.path.exists(file)]
+    if not addfiles: return "0/files"
+    cnt = len(addfiles)
+    oldest = min(addfiles)
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - oldest)
     dd = d.days
     hh = d.seconds//3600
@@ -412,6 +426,7 @@ class GtMake(Make):
     """ Uncommitted local changes. """
     branch = self.gtlocalbranch()
     unstaged = self.gtunstagedfiles(_show=_show)
+    unstaged = unstaged if unstaged else ""
     return unstaged+self._cmdstr(["git","diff","--name-only",f"{branch}"],_show=_show)
 
   def gtuncommitteddiff(self,_show=True) -> str:

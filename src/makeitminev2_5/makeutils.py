@@ -25,10 +25,10 @@ class MakeUtils():
     hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
     with open(fn,"r") as i:
       with open(hfn,"w") as o:
-        for l in i:
-          nl = re.sub(pattern,s,l)
+        for line in i:
+          nl = re.sub(pattern,s,line)
           o.write(nl)
-          if l != nl:
+          if line != nl:
             if not changed:
               print(f"sed 's/{pattern}/{s}/g' {fn}")
               changed=True
@@ -43,9 +43,9 @@ class MakeUtils():
     """ util: Return lines in file that match pattern. """
     retval = []
     with open(fn,"r") as i:
-      for l in i:
-        if re.search(pattern,l):
-          retval.append(l)
+      for line in i:
+        if re.search(pattern,line):
+          retval.append(line)
     return "\n".join(retval)
 
   @classmethod
@@ -112,18 +112,17 @@ class MakeUtils():
   def _rebuild_target(cls,target:str,dependencies: list) -> bool:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
     if not os.path.exists(target):
-      print(f"{target} does not exist rebuilding")
+      print(f"target '{target}' does not exist rebuilding")
       return True
     mtime = os.path.getmtime(target)
     for dependency in dependencies:
       if not os.path.exists(dependency):
-        print(f"{target} is out of date, {dependency} does not exist assuming it will be built when rebuilding target.")
+        print(f"target '{target}' is out of date, dependency '{dependency}' does not exist assuming it will be built when rebuilding target.")
         return True
       if cls._newermtime(mtime,dependency):
-        print(f"{target} is out of date, {dependency} is older than dependency and needs rebuilding")
+        print(f"target '{target}' is out of date, dependency '{dependency}' is older than dependency and needs rebuilding")
         return True
-
-    print(f'{target} is up to date, dependencies {",".join(dependencies)}')
+    print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
     return False
 
   def _setcwdX(self,pj:str=None) -> None:

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import os
 import re
+import argparse
 import json
 from pathlib import Path
 from makeitminev2_5.ap_decorator import ap_decorator_main, ap_decorator_runcmd
@@ -13,6 +14,11 @@ class Make(ABC,MakeUtils):
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.preferences = os.path.join(Path.home(),".makeitmine.json")
+
+  @abstractmethod
+  def _files(self) -> list:
+    """ Perminant files that can be created by this class. """
+    return []
 
   @abstractmethod
   def _ignorepaths(self) -> list:
@@ -35,7 +41,24 @@ class Make(ABC,MakeUtils):
   @abstractmethod
   def _checkfile(self,file:str) -> bool:
     """ Check the syntax and semantics in a file """
+    if file.endswith(".json"):
+      with open(file,"r",encoding='utf-8') as f:
+        try:
+          json.load(f)
+        except Exception as e:
+          print(f"{file} bad json syntax error is {e}")
+          return False
     return True
+
+  def checkfile(self,file:str) -> bool:
+    """ Check the syntax in a file
+    :param file: Path to the file to be checked
+    """
+    touch = os.path.join(os.path.dirname(file),f".{os.path.basename(file)}.touch")
+    if not self._rebuild_target(touch,[file]): return True
+    r = self._checkfile(file)
+    self._touch(touch)
+    return r
 
   @abstractmethod
   def _build(self) -> None:
@@ -76,6 +99,10 @@ class Make(ABC,MakeUtils):
   def _work_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
     return []
+
+  @classmethod
+  def _main(cls,ap:argparse.ArgumentParser):
+    pass
 
   @classmethod
   def main(cls):
@@ -126,8 +153,8 @@ class Make(ABC,MakeUtils):
     self.BUILDVERSION_dot_txt()
     p=os.path.join(self.cwd,self.bv)
     with open(p,"r") as f:
-      for l in f:
-        m = re.search('^(.*):(.*)',l)
+      for line in f:
+        m = re.search('^(.*):(.*)',line)
         if m:
           return m.group(1)
 
@@ -136,8 +163,8 @@ class Make(ABC,MakeUtils):
     self.BUILDVERSION_dot_txt()
     p=os.path.join(self.cwd,self.bv)
     with open(p,"r") as f:
-      for l in f:
-        m = re.search('^(.*):(.*)',l)
+      for line in f:
+        m = re.search('^(.*):(.*)',line)
         if m:
           return m.group(2)
 

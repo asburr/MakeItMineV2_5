@@ -16,12 +16,12 @@ ap_decorator_doc = """
 
 
 __d = {
-  bool: {"action":"store_false"},
+  bool: {"action":"store_true"},
   int: {"type":int},
   str: {},
   list[int]: {"type":int,"nargs":"*"},
   list[str]: {"nargs":"*"},
-  list[bool]: {"action":"store_false","nargs":"*"}
+  list[bool]: {"action":"store_true","nargs":"*"}
 }
 
 
@@ -94,8 +94,6 @@ def ap_decorator_runcmd(cls):
   if not hasattr(a, 'func'):
     cls.parser_g.print_help()
     os._exit(1)
-  d = vars(a).copy()
-  del d["command"]
-  del d["func"]
+  d = {k:v for k,v in a.__dict__.items() if k not in ["command","func"] and v is not None}
   r = getattr(m,a.func.__name__)(**(d | kwargs))
   if r is not None: print(r)

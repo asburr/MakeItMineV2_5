@@ -13,6 +13,11 @@ class DkMake(Make):
     """ List of visible paths to ignore. """
     return super()._ignorepaths() + ["dkrun_release.env"]
 
+  def _checkfile(self,file:str) -> bool:
+    if file.endswith("Dockerfile"):
+      self.dkbuild()
+    return super()._checkfile(file)
+
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.dkf = os.path.join("docker","Dockerfile")
@@ -75,7 +80,7 @@ download/
     if "unknown command" in r:
       print("docker buildx is not installed. sudo apt-get install docker-buildx")
       sys.exit(1)
-    if not self._cmd(["which","docker","compose"],_show=_show):
+    if not self._cmd(["docker","compose"],_show=_show):
       print("docker compose is not installed. apt update; apt-get install docker-compose-plugin")
       print("""
 Hint:
@@ -99,25 +104,46 @@ Hint:
       print("Note: must 'Add Docker’s official GPG key' and 'Set up the repository' before installing the plugin")
       sys.exit(1)
 
-  def dkbuild(self,secret:str=None) -> None:
+  def dkbuild(self,buildargk:list[str]=[],buildargv:list[str]=[],secret:str=None,check:bool=False) -> None:
     """ Build container using docker/Dockerfile.
-      :param secret: semicolon separated of id=<id>,src=<path>
+      :param buildargk: Keys for build-arg.
+      :param buildargv: Values for build-arg.
+      :param secret: semicolon separated of id=<id>,src=<path>.
+      :param check: checks the Dockerfile and does not build anything.
     """
-    touchfile=os.path.join("docker","dkbuild")
+    touchfile=os.path.join("docker",".dkbuild.touch")
     # TODO; how to add python package deps.
-    if not self._rebuild_target(touchfile, [self.dkf]): return
+    if not check and not self._rebuild_target(touchfile, [self.dkf]): return
     self.dkcheck()
     name = self.name()
     version = self.version()
-    cmd = ["docker","build",]
+    cmd = ["docker","build"]
+    if check: cmd += ["--check"]
     with open(self.dkf,"r") as f:
       for line in f:
         m = re.search('--mount=type=secret,id=(.*),target=',line)
         if m:
           id = m.group(1)
           if not secret or f"id={id}," not in secret:
-            print(f"--secret id={id},src=<path> - see {self.dkf}")
+            print(f"ERROR, expecting: --secret id={id},src=<path> - see {self.dkf}")
             sys.exit(1)
+        m = re.search('^ARG ([^= #]*).*',line)
+        if m:
+          k = m.group(1).strip()
+          m = re.search('.*:python (.*):.*',line)
+          if m:
+            x = None
+            # exec support muiltiple statments and returns nothing but must set x for "or x" to work.
+            v = exec(m.group(1).strip()) or x
+            cmd.append("--build-arg")
+            cmd.append(f"{k}={v}")
+          elif not re.match(".*=.*",line):
+            if k not in buildargk:
+              print(f"ERROR, expecting: --buildargk {k} --buildargv <value> {line}")
+              sys.exit(1)
+    for k,v in zip(buildargk,buildargv):
+      cmd.append("--build-arg")
+      cmd.append(f"{k}={v}")
     if secret:
       for s in secret.split(";"):
         cmd.append("--secret")
@@ -133,6 +159,7 @@ Hint:
       "--build-context","projects=../../projects",
       "--target","development","."
       ],_show=True)
+    if check: return
     # Removes all stopped containers, all networks not used by at least one
     # container, all dangling images (untagged image layers that are no
     # longer used by any images), and unused build cache. 
@@ -151,10 +178,16 @@ Hint:
       ],_show=True)
     self._touch(touchfile)
 
-  def _dkrun_release_env(self) -> None:
+  def _dkrun_release_env(self,prod:bool=True) -> None:
     """ Replace variables in release.env. """
     with open(self.dkr,"r") as r, open(self.dkdr,"w") as w:
       for line in r:
+        if line.startswith("PROD_"):
+          if not prod: continue
+          line=line[5:]
+        if line.startswith("DEV_"):
+          if prod: continue
+          line=line[4:]
         if "USERID" in line:
           w.write(f"USERID={os.getuid()}{os.linesep}")
         elif "GROUPID" in line:
@@ -185,11 +218,11 @@ Hint:
     if "container_name" not in locals():
       print(f"Failed to find container_name for {service} in {self.dkdc}")
       return
-    self._dkrun_release_env()
+    self._dkrun_release_env(prod=False)
     try:
       self._cmd(["docker","stop",container_name],_show=True)
       self._cmd(["docker","rm",container_name],_show=True)
-    except:
+    except Exception:
       pass
     self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkr,
                            "run","orphans","--name",container_name,"-it",service,"/bin/bash"],_show=True)
@@ -220,12 +253,56 @@ Hint:
             self._cmd(["docker","pull",image],_show=True)
             self._cmd(["tag",image,tag],_show=True)
 
+  def dklogs(self,service:str=None) -> None:
+    """ Tails the logs from services in example/docker-compose.yml
+    :param service: select a service. Default is logs from all services.
+    """
+    if not os.path.exists(self.dkdc):
+      print(f"{self.dkdc} does not exist")
+      return
+    self._dkrun_release_env(prod=False)
+    p = ["--follow"]
+    if service: p += [service]
+    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "logs"]+p,_show=True)
+
+  def dkexec(self,cmd:str,service:str=None) -> None:
+    """ Run a command inside a service started by compose.yaml
+    :param cmd: Command to run inside the container
+    :param service: Optional name of the service to identify the container. Default expects one service and selects that.
+    """
+    if not os.path.exists(self.dkdc):
+      print(f"{self.dkdc} does not exist")
+      return
+    self._dkrun_release_env(prod=False)
+    if not service:
+      services = self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "ps","--services"],_show=True)
+      if not services:
+        print("no running services")
+        return
+      if len(services) > 1:
+        print(f"{services} running services, please select service using option --container")
+        return
+      service=services[0]
+    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "exec",service,cmd],_show=True)
+
   def dkup(self) -> None:
     """ Run the services in example/docker-compose.yml """
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
-    self._dkrun_release_env()
+    self._dkrun_release_env(prod=False)
+    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
+                "up","--detach"],_show=True)
+
+  def dkupprd(self) -> None:
+    """ Run the services in example/docker-compose.yml """
+    if not os.path.exists(self.dkdc):
+      print(f"{self.dkdc} does not exist")
+      return
+    self._dkrun_release_env(prod=True)
     self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "up","--detach"],_show=True)
 
@@ -234,15 +311,17 @@ Hint:
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
+    self._dkrun_release_env(prod=False)
     self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "down"],_show=True)
     self._cmdInteractive(["docker","network","prune","-f"],_show=True)
 
   def dkreup(self) -> None:
-    """ Simulates a restart of the services with persistent state. """
+    """ Simulates a restart of the services without recreating DATA/FILE i.e. persistent state. """
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
+    self._dkrun_release_env(prod=False)
     self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "down"],_show=True)
     self._cmd(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
@@ -287,8 +366,6 @@ Hint:
   def _main(cls,ap:argparse.ArgumentParser):
     """ Add extra parameters. """
     super()._main(ap)
-    cls._add_argument(ap,'service', help="Service for docker dkrun", cmds=["dkrun"])
-    cls._add_argument(ap,'secrets', help="zero, one or more secrets for docker dkbuild", cmds=["dkbuild"], optional=True)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from makeitminev2_5.pymake import PyMake
 from makeitminev2_5.djmake import DJMake
 from makeitminev2_5.wsmake import WSMake
 from texttable import Texttable
+import shutil
 import os
 
 
@@ -39,7 +40,8 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
     self._build()
     self._test()
     if version or major or minor or self._upversionneeded():
-      self._upversion(version,major,minor)
+      version=f"{version}.{major}.{minor}"
+      self._upversion(version=version,oldversion=self.version())
       self._release()
 
   def _workwarning(self,pj:str) -> None:
@@ -63,7 +65,7 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
   def work(self) -> None:
     """ work remaining in the workflow for this project. """
     name = self.name()
-    table = Texttable(max_width=os.get_terminal_size().columns)
+    table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
@@ -80,7 +82,7 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
   def status(self) -> None:
     """ Workflow status for this project. """
     name = self.name()
-    table = Texttable(max_width=os.get_terminal_size().columns)
+    table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
