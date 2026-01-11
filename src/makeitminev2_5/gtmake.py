@@ -263,6 +263,7 @@ class GtMake(Make):
     """
     if name: self._cmd(["git","config","--global","user.name",name],_show=True)
     if email: self._cmd(["git","config","--global","user.email",email],_show=True)
+    self._cmd(["git","config","pull.rebase","false"],_show=True)    
     if location:
       if self.gtrepo():
         print(f"ERROR: {self.cwd} is a git project")
