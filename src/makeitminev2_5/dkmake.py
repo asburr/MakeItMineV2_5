@@ -132,9 +132,14 @@ Hint:
           k = m.group(1).strip()
           m = re.search('.*:python (.*):.*',line)
           if m:
-            x = None
             # exec support muiltiple statments and returns nothing but must set x for "or x" to work.
-            v = exec(m.group(1).strip()) or x
+            p = m.group(1).strip()
+            results = {}
+            v= exec(p, globals(), results)
+            v = results.get("x")
+            if v is None:
+              print(f"ERROR in {self.dkf} in python: {p}")
+              os._exit(1)
             cmd.append("--build-arg")
             cmd.append(f"{k}={v}")
           elif not re.match(".*=.*",line):

@@ -8,9 +8,6 @@ RUN adduser git
 # Setup git server filespace.
 ARG REMOTEGIT=/remotegit
 RUN mkdir $REMOTEGIT && chmod a+rwx $REMOTEGIT
-# Create a "remote" repo for MakeItMine.
-ARG MIMREMOTE=$REMOTEGIT/MakeItMine
-RUN mkdir $MIMREMOTE && chmod a+rwx $MIMREMOTE
 
 # make dir for the MIM tool.
 RUN mkdir -p /projects/MakeItMineV2_5 && chmod -R a+wrx /projects/MakeItMineV2_5
@@ -48,6 +45,10 @@ RUN apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 RUN groupadd -r appgroup && useradd -m -r -g appgroup -s /bin/false appuser
 RUN usermod -aG docker appuser
 USER appuser
+
+# Create a "remote" repo for MakeItMine.
+ARG MIMREMOTE=$REMOTEGIT/MakeItMine
+RUN mkdir $MIMREMOTE && chmod a+rwx $MIMREMOTE
 
 FROM base AS projectbase
 

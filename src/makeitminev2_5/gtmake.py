@@ -57,7 +57,7 @@ class GtMake(Make):
   def _workTitles(self) -> list:
     """ Titles for work """
     return super()._workTitles()+[
-      "gtcreate",
+      "gtinitshow\ngtsetup",
       "gtuntracked\nlocal>local\ngtadd",
       "gtmainahead\nmain>local\ngtrebasemain",
       "gtremoteahead\nremote>local\ngtrebaseremote",
@@ -67,8 +67,11 @@ class GtMake(Make):
 
   def _work(self) -> list:
     """ Gather project work """
-    if not self.gtrepo():
+    if not self.gtrepo(_show=False):
       return super()._work()+["no repo","","","","","",""]
+    email = self._cmdstr(["git","config","--global","user.email"],_show=False)
+    if not email:
+      return super()._work()+["no email","","","","","",""]
     self.gtfetch(_show=False)
     untracked = self.gtuntracked(_show=False)
     untracked = "" if untracked == "0/files" else untracked
@@ -78,7 +81,7 @@ class GtMake(Make):
     main = "" if main == "n/a on main" or main == "0/files" else main
     mainbehind = self.gtmainbehind(_show=False)
     mainbehind = "" if mainbehind == "n/a on main" or mainbehind == "0/files" else mainbehind
-    uncommited = self.gtuncommitted()
+    uncommited = self.gtuncommitted(_show=False)
     uncommited = "" if uncommited == "0/files" else uncommited
     remotebehind = self.gtremotebehind(_show=False)
     remotebehind = "" if remotebehind == "n/a on main" or remotebehind == "0/files" else remote
@@ -252,32 +255,55 @@ class GtMake(Make):
     os.chdir(path)
     self._cmd(["git","init","--bare","--initial-branch=main","--shared=all"],_show=True)
 
-
-  def gtrepo(self) -> bool:
+  def gtrepo(self,_show:bool=True) -> bool:
     """ Check if current working directory is a git repo. """
-    status = self._cmd(["git","status"],_show=False,fail=False,stderr=True)
+    status = self._cmd(["git","status"],_show=_show,fail=False,stderr=True)
     return not self._substring("fatal: not a git repository",status)
 
-  def gtcreate(self,url:str) -> None:
-    """ Create a Git repository from the current working directory.
-        Asks the user for the URL for the remote repo.
-    """
-    print(os.getcwd())
+  def gtsetupshow(self,name:str,email:str) -> None:
+    """ Show the status of the local repo with user name and email. """
     if not self.gtrepo():
-      print(f"ERROR: {self.cwd} is a git project")
-      return
-    self.gtignore()
-    self._cmdInteractive(["git","init","--initial-branch","main","."],_show=True)
-    self.gtadd()
-    # Before push, must have at least one commit in the local history.
-    self._cmd(["git","commit","-m","initial commit"],_show=True)
-    # Add the path to the repository as a remote, origin being the standard
-    # convention for a remote repo.
-    self._cmd(["git","remote","add","origin",url],_show=True)
-    self.gtpush()
+      print(f"{os.getcwd()} is not a repo, run gtsetup")
+      os._exit(1)
+    name = self._cmdstr(["git","config","--global","user.name"],_show=True)
+    email = self._cmdstr(["git","config","--global","user.email"],_show=True)
+    print(f"name='{name}' email='{email}'")
+    if not email or not name:
+      print("Setup local git, run gtsetup")
+      os._exit(1)
+
+  def gtsetup(self,location:str=None,name:str=None,email:str=None) -> None:
+    """ Initialize CWD as a local repo and/or setup user name and email for
+        local repo.
+        :param location: Location of the remote repo which may be a URL or path.
+        :param name: Name for the user of git.
+        :param email: Email for the user of git.
+    """
+    if name: self._cmd(["git","config","--global","user.name",name],_show=True)
+    if email: self._cmd(["git","config","--global","user.email",email],_show=True)
+    if location:
+      if self.gtrepo():
+        print(f"ERROR: {self.cwd} is a git project")
+        os._exit(1)
+      self.gtignore()
+      email = self._cmdstr(["git","config","--global","user.email"],_show=True)
+      name = self._cmdstr(["git","config","--global","user.email"],_show=True)
+      if not email or not name:
+        print("ERROR: use gtinit to set email and name")
+        os._exit(1)
+      self._cmdInteractive(["git","init","--initial-branch","main","."],_show=True)
+      self.gtadd()
+      # Before push, must have at least one commit in the local history.
+      self._cmd(["git","commit","-m","initial commit"],_show=True)
+      # Add the path to the repository as a remote, origin being the standard
+      # convention for a remote repo.
+      self._cmd(["git","remote","add","origin",location],_show=True)
+      self._cmd(["git","push","-u","origin","main"],_show=True)
 
   def gtsetremote(self,url:str) -> None:
-    """ Setup the remote URL for a newly created local project. """
+    """ Change set remote URL for a local repo.
+    :param url: Location of the remote repo which may be a URL or path.
+    """
     for u in self._cmd(["git","remote","get-url","origin","--all"],_show=True):
       if u != url:
         print(f"different url in .git/config please edit to delete the url {u}")
@@ -407,10 +433,11 @@ class GtMake(Make):
     """ Unstaged local files. """
     return self._cmdstr(["git","ls-files","--modified","--deleted"],_show=_show)
 
-  def gtuncommitted(self,_show=True) -> str:
+  def gtuncommitted(self,_show:bool=True) -> str:
     """ Uncommitted local changes; excluding deleted files. """
     branch = self.gtlocalbranch()
-    files = self.gtuncommittedfiles(_show=False) + self.gtunstagedfiles(_show=_show)
+    files = self.gtunstagedfiles(_show=_show)
+    files = self.gtuncommittedfiles(_show=_show) + (files if files else "")
     if not files: return "0/files"
     addfiles = [os.path.getmtime(file) for file in files.split(os.linesep) if os.path.exists(file)]
     if not addfiles: return "0/files"
@@ -425,9 +452,12 @@ class GtMake(Make):
   def gtuncommittedfiles(self,_show=True) -> str:
     """ Uncommitted local changes. """
     branch = self.gtlocalbranch()
-    unstaged = self.gtunstagedfiles(_show=_show)
+    unstaged = self._cmd(["git","ls-files","--modified","--deleted"],_show=_show)
     unstaged = unstaged if unstaged else ""
-    return unstaged+self._cmdstr(["git","diff","--name-only",f"{branch}"],_show=_show)
+    uncommitted = self._cmd(["git","diff","--name-only",f"{branch}"],_show=_show)
+    r = set(unstaged)
+    if uncommitted: r |= set(uncommitted)
+    return "\n".join(r)
 
   def gtuncommitteddiff(self,_show=True) -> str:
     """ Uncommitted local changes. """

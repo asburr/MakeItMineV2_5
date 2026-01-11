@@ -35,13 +35,22 @@ class Test_makeitmine():
     r = self.rcmd(["whoami"],fail=True,_show=True)
     assert r=="appuser"
 
-  def test_makeitmine(self):
+  def test_status_norepo(self):
     r = self.rcmd([self.m,"work"],fail=True,_show=True)
+    assert "gtinitshow" in r
+    assert "gtsetup" in r
     assert "no repo" in r
-    assert "gtcreate" in r
 
   def test_repo(self):
+    """ workflow #1: create a remote repo. """
     self.rcmd([self.m,"gtremoterepo",self.R],fail=True,_show=True)
 
   def test_create(self):
-    self.rcmd([self.m,"gtcreate",self.R],fail=True,_show=True)
+    """ workflow #2: create a local repo that is connected to the remote repo. """
+    self.rcmd([self.m,"gtsetup","--location",self.R,"--name","appuser","--email","appuser@appgroup.test"],fail=True,_show=True)
+
+  def test_status_newrepo(self):
+    r = self.rcmd([self.m,"work"],fail=True,_show=True)
+    assert "gtinitshow" not in r
+    assert "gtsetup" not in r
+    assert "no repo" not in r
