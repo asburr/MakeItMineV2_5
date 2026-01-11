@@ -210,8 +210,8 @@ class GtMake(Make):
     self._cmdInteractive(["git","merge","main"],_show=True)
 
   def gtrebaseremote(self) ->  None:
-    """ TO TEST: rebase local branch with new changes on remote branch. """
-    work = self._cmd(["git","work"],_show=True)
+    """ rebase local branch with new changes on remote branch. """
+    work = self._cmd(["git","status"],_show=True)
     if [x for x in work if "interactive rebase in progress" in x]:
       print("ERROR gtrebasemain in progress")
       return
