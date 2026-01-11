@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import os
 import re
-import argparse
 import json
 from pathlib import Path
 from makeitminev2_5.ap_decorator import ap_decorator_main, ap_decorator_runcmd
@@ -16,11 +15,6 @@ class Make(ABC,MakeUtils):
     self.preferences = os.path.join(Path.home(),".makeitmine.json")
 
   @abstractmethod
-  def _files(self) -> list:
-    """ Perminant files that can be created by this class. """
-    return []
-
-  @abstractmethod
   def _ignorepaths(self) -> list:
     """ List of visible paths to ignore. """
     return []
@@ -32,11 +26,6 @@ class Make(ABC,MakeUtils):
     :param pj: project name.
     """
     return None
-
-  @abstractmethod
-  def _newfile(self,file:str) -> None:
-    """ Adds a new file to the project. """
-    pass
 
   @abstractmethod
   def _checkfile(self,file:str) -> bool:
@@ -59,16 +48,6 @@ class Make(ABC,MakeUtils):
     r = self._checkfile(file)
     self._touch(touch)
     return r
-
-  @abstractmethod
-  def _build(self) -> None:
-    """ build the project. """
-    pass
-
-  @abstractmethod
-  def _test(self) -> None:
-    """ test the project """
-    pass
 
   @abstractmethod
   def _release(self) -> None:
@@ -99,10 +78,6 @@ class Make(ABC,MakeUtils):
   def _work_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
     return []
-
-  @classmethod
-  def _main(cls,ap:argparse.ArgumentParser):
-    pass
 
   @classmethod
   def main(cls):

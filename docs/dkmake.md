@@ -1,5 +1,4 @@
 # docker (dk) make
-
 ## Dockerfile structure
 
 ```

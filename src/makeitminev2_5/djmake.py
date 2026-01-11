@@ -6,10 +6,6 @@ class DJMake(Make):
   """ Platform independent recipies for a Makefile supporting a Django project.
   """
 
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return super()._ignorepaths()
-
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.x = os.path.join("docker","Dockerfile")

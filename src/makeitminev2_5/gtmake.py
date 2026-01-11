@@ -8,28 +8,8 @@ class GtMake(Make):
   based developement is working on temporary branches directly off main.
   """
 
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return super()._ignorepaths()
-
-  def _newfile(self,file:str) -> None:
-    """ Created a new file that needs to be added to the project.
-    Let other makes decide what added means. """
-    try:
-      self._cmd(["git","add",file],_show=True)
-    except Exception as e:
-      print(f"Warning could not add {file} to git in {self.cwd} due to {e}")
-
   def _checkfile(self,file:str) -> bool:
     return super()._checkfile(file)
-
-  def _build(self,pj:str) -> None:
-    """ build the project. """
-    super._build(pj)
-
-  def _test(self,pj:str) -> None:
-    """ test """
-    super._test(pj)
 
   def _upversion(self,pj:str,version:str,oldversion:str) -> str:
     """ Update files containing version from BUILDVERSION.txt. """
@@ -94,7 +74,7 @@ class GtMake(Make):
 
   def gtignore(self) -> None:
     """ Create or append to .gitignore in current working directory. """
-    paths = [f"{x}/" for x in self.ignorepaths()] + [".*/", "*.py[cod]"]
+    paths = [f"{x}/" for x in self.ignorepaths()] + [".*/", ".*", "!.gitignore", "*.py[cod]"]
     if not os.path.exists(self.gitignore):
       print("creating {self.gitignore}")
       with open(self.gitignore,"w") as f:
@@ -139,7 +119,9 @@ class GtMake(Make):
     self._cmd(["git","clone",url,pj],_show=True)
 
   def gtbranch(self,branch:str) -> None:
-    """ Switch to a branch. Create branch locally if it does not exist. """
+    """ Switch to a branch. Create branch locally if it does not exist.
+        :param branch: the name of the branch
+    """
     localbranch = self.gtlocalbranch()
     if localbranch == branch:
       print(f"already on {branch}")

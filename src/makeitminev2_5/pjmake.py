@@ -11,19 +11,6 @@ import os
 class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
   """ Project make using other makes. """
 
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return super()._ignorepaths()
-
-  def build(self) -> None:
-    """ build """
-    self._build()
-
-  def test(self) -> None:
-    """ build and test """
-    self._build()
-    self._test()
-
   def upversion(self) -> None:
     """ Update version in BUILDVERSION.txt. """
     oldversion = self.version()
@@ -37,8 +24,6 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
   def release(self,version:str=None,major:int=-1,minor:int=-1) -> None:
     """ Build and test before release. Change the version if provided in the
     parameters, otherwise up version and release only when there are changes. """
-    self._build()
-    self._test()
     if version or major or minor or self._upversionneeded():
       version=f"{version}.{major}.{minor}"
       self._upversion(version=version,oldversion=self.version())
@@ -49,18 +34,6 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
     if self.name().lower() != self.name():
       print(f"ERROR: name in {self.bv} must be lowercase")
       os._exit(1)
-
-  def _workreduce(self,align:list,titles:list,body:list) -> (list,list):
-    """ Remove columns with empty values. """
-    showcell=[True for _ in titles]
-    for row in body:
-      for i,cell in enumerate(row):
-        showcell[i] &= (cell != "")
-    align = [cell for i,cell in enumerate(align) if showcell[i]]
-    t = []
-    for row in [titles] + body:
-      t.append([cell for i,cell in enumerate(row) if showcell[i]])
-    return (align,t)
 
   def work(self) -> None:
     """ work remaining in the workflow for this project. """

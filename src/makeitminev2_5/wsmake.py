@@ -9,46 +9,13 @@ from texttable import Texttable
 class WSMake(Make):
   """ Workspace work. """
 
-  def wsset(self,ws:str) -> None:
-    """ Select a workspace. Will create the workspace if is does not exist.
-    :param ws: path to workspace.
-    """
-    if not os.path.exists(ws):
-      with open(ws,"w") as f: json.dump({},f)
-      print(f"info: created {ws}")
-    else:
-      try:
-        with open(ws,"r") as f:
-          self._wsload(json.load(f))
-      except Exception as e:
-        print(f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}")
-        os._exit(1)
-    self._addpreference(key="ws",value=ws)
-
   def wspjpath(self,pj:str) -> str:
-    ws = self._getpreference(key="ws")
+    ws = self.getpreference(key="ws")
     with open(ws,"r") as f:
       return self._wsload(json.load(f)).get(pj,None)
 
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return super()._ignorepaths()
-
   def _checkfile(self,file:str) -> bool:
     return super()._checkfile(file)
-
-  def _newfile(self,file:str) -> None:
-    super()._newfile(file)
-
-  def _wsrm(self,pj:str,path:str) -> None:
-    ws = self._getpreference(key="ws")
-    super()._wsrm(ws,pj,path)
-
-  def _build(self) -> None:
-    super()._build()
-
-  def _test(self) -> None:
-    super()._test()
 
   def _release(self) -> None:
     super()._release()
@@ -73,6 +40,22 @@ class WSMake(Make):
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.default_ws = "ws.json"
+
+  def wsset(self,ws:str) -> None:
+    """ Select a workspace. Will create the workspace if is does not exist.
+    :param ws: path to workspace.
+    """
+    if not os.path.exists(ws):
+      with open(ws,"w") as f: json.dump({},f)
+      print(f"info: created {ws}")
+    else:
+      try:
+        with open(ws,"r") as f:
+          self._wsload(json.load(f))
+      except Exception as e:
+        print(f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}")
+        os._exit(1)
+    self.setpreference(key="ws",value=ws)
 
   def _getws(self) -> str:
     ws = self.getpreference("ws")

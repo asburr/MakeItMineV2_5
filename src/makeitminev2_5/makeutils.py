@@ -125,6 +125,19 @@ class MakeUtils():
     print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
     return False
 
+  @classmethod
+  def _workreduce(cls,align:list,titles:list,body:list) -> (list,list):
+    """ Remove columns with empty values. """
+    showcell=[True for _ in titles]
+    for row in body:
+      for i,cell in enumerate(row):
+        showcell[i] &= (cell != "")
+    align = [cell for i,cell in enumerate(align) if showcell[i]]
+    t = []
+    for row in [titles] + body:
+      t.append([cell for i,cell in enumerate(row) if showcell[i]])
+    return (align,t)
+
   def _setcwdX(self,pj:str=None) -> None:
     """ Util: change dir to pj or cwd """
     os.chdir(pj if pj else self.cwd)

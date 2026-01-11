@@ -1,17 +1,12 @@
 import os
 import sys
 import re
-import argparse
 from makeitminev2_5.make import Make
 
 
 class DkMake(Make):
   """ Platform independent recipies for a Makefile supporting a Docker projects.
   """
-
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return super()._ignorepaths() + ["dkrun_release.env"]
 
   def _checkfile(self,file:str) -> bool:
     if file.endswith("Dockerfile"):
@@ -25,9 +20,9 @@ class DkMake(Make):
     self.dkr = "release.env"
     self.dkdr = "dkrun_release.env"
 
-  def _files(self) -> list:
-    """ Perminant files that can be created by this class. """
-    return super()._files()+[self.dkf,self.dkdc,self.dkr,self.dkdr]
+  def _ignorepaths(self) -> list:
+    """ List of visible paths to ignore. """
+    return super()._ignorepaths() + [self.dkdr]
 
   def create_Dockerfile(self) -> None:
     """ Create the initial Dockerfile if does not exist. """
@@ -366,11 +361,6 @@ Hint:
       self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
     if os.path.exists(self.dkf):
       self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
-
-  @classmethod
-  def _main(cls,ap:argparse.ArgumentParser):
-    """ Add extra parameters. """
-    super()._main(ap)
 
 
 if __name__ == "__main__":

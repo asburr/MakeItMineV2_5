@@ -12,9 +12,6 @@ class PyMake(Make,MakeUtils):
   def _ignorepaths(self) -> list:
     return super()._ignorepaths() + ["venv","__pycache__", "dist"]
 
-  def _newfile(self,file:str) -> None:
-    super()._newfile(file)
-
   def _checkfile(self,file:str) -> bool:
     """ Check Python syntax """
     if file.endswith(".py"):
@@ -27,12 +24,6 @@ class PyMake(Make,MakeUtils):
     if file == "pyproject.toml":
       self._cmdInteractive([self.poetry_p,"check"],fail=True,_show=True)
     return super()._checkfile(file)
-
-  def _build(self) -> None:
-    super()._build()
-
-  def _test(self) -> None:
-    super()._test()
 
   def _release(self) -> None:
     super()._release()
@@ -84,10 +75,6 @@ class PyMake(Make,MakeUtils):
       self._cmd([self.poetry_p,"config","cache-dir",self.cache],_show=False)
       os.mkdir(self.cache)
     self.lockfile = "poetry.lock"
-
-  def _files(self) -> list:
-    """ Perminant files that can be created by this class. """
-    return super()._files()+[self.toml,self.lockfile]
 
   def pyproject_dot_toml(self) -> str:
     """ Create pyproject.toml if one does not exists. """
