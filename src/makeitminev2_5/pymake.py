@@ -12,17 +12,16 @@ class PyMake(Make,MakeUtils):
   def _ignorepaths(self) -> list:
     return super()._ignorepaths() + ["venv","__pycache__", "dist"]
 
-  def _checkfile(self,file:str) -> bool:
+  def _checkfile(self,file:str) -> str:
     """ Check Python syntax """
     if file.endswith(".py"):
-      ruff = self._cmdstr([self.poetry_p,"run","ruff","check","--quiet","--ignore=E402,F541,E70",file],fail=False,_show=True)
-      if ruff: print(ruff)
-      lint = self._cmdstr([self.poetry_p,"run","pylint","--errors-only","--disable=C,R",file],fail=False,_show=True)
-      if lint: print(lint)
-      if ruff or lint:
-        return False
+      ruff = self._cmdstr([self.poetry_p,"run","ruff","check","--quiet","--ignore=E402,F541,E70",file],fail=False,_show=True,stderr=True)
+      if ruff: return ruff
+      lint = self._cmdstr([self.poetry_p,"run","pylint","--errors-only","--disable=C,R",file],fail=False,_show=True,stderr=True)
+      if lint: return lint
     if file == "pyproject.toml":
-      self._cmdInteractive([self.poetry_p,"check"],fail=True,_show=True)
+      r = self._cmdstr([self.poetry_p,"check"],fail=False,_show=True)
+      if "All set!" not in r: return r
     return super()._checkfile(file)
 
   def _release(self) -> None:
@@ -37,11 +36,14 @@ class PyMake(Make,MakeUtils):
 
   def _work_align(self) -> list:
     """ Gather table alignment as "l" "r" "c" """
-    return super()._work_align()+["c"]
+    return super()._work_align()+["l","l"]
 
   def _workTitles(self) -> list:
     """ Titles for work """
-    return super()._workTitles()+["pypackage\nlocal>local\npypackage"]
+    return super()._workTitles()+[
+      "pycheck\nlocal>local\npysync",
+      "pypackaged\nlocal>local\npypackage"
+    ]
 
   def _work(self) -> list:
     """ Gather project work """
@@ -51,8 +53,9 @@ class PyMake(Make,MakeUtils):
       print(f"ERROR: cannot find source path {p}")
       os._exit(1)
     self.init_dot_py()
-    work  = "Not packages" if not os.path.exists(self.wheel) else ""
-    return super()._work()+[work]
+    packaging = self.pypackageshow()
+    check = self.pycheck()
+    return super()._work()+[check,packaging]
 
   ### End framework required implementations.
  
@@ -70,10 +73,11 @@ class PyMake(Make,MakeUtils):
     self.download = os.path.join(self.cwd,".download")
     if not os.path.exists(self.download): os.mkdir(self.download)
     self.wheel = os.path.join(self.download,f"{self.name().lower()}-{self.version()}-py3-none-any.whl")
-    self.cache = os.path.join(self.cwd,".cache")
-    if not os.path.exists(self.cache):
-      self._cmd([self.poetry_p,"config","cache-dir",self.cache],_show=False)
-      os.mkdir(self.cache)
+    if False: # Don't change the cache dir.
+      self.cache = os.path.join(self.cwd,".cache")
+      if not os.path.exists(self.cache):
+        self._cmd([self.poetry_p,"config","cache-dir",self.cache],_show=False)
+        os.mkdir(self.cache)
     self.lockfile = "poetry.lock"
 
   def pyproject_dot_toml(self) -> str:
@@ -102,26 +106,26 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 # dev group - packages for pytest and pyintegrationtest and installed from pypi.
-dev = [
-  {{include-group = "main"}}
-]
-# prod group - inhouse packages used by CI/CD job to install packages from pypi.
-prod = [
-  {{include-group = "main"}}
-]
-# wsdev group - inhouse packages used in development to install packages as editable from local path.
-wsdev = [
-  {{include-group = "dev"}}
-]
-# wsprod group - inhouse packages used in development to install wheels from local path to test the production install.
-wsprod = [
-  {{include-group = "main"}}
+dev = []
+# inhouse_prod group - inhouse packages used by CI/CD job to install packages from pypi.
+inhouse_prod = []
+# inhouse_wsdev group - inhouse packages used in development, install packages as editable from local path.
+inhouse_wsdev = []
+# inhouse_wsprod group - inhouse packages used in development, install wheels from local path to test the production install.
+inhouse_wsprod = []
+markers = [
+  "e2e: end to end testing, or production testing",
+  "unit: utin testing"
 ]
 """)
     self._cmd([self.poetry_p,"add","--group","dev","pylint"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","ruff"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","pytest"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","spyder-kernels==3.1"],_show=True)
+    placeholder_package = "setuptools" # so groups are not empty.
+    self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",placeholder_package],_show=True)
+    self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",placeholder_package],_show=True)
+    self._cmd([self.poetry_p,"add","--group","inhouse_prod",placeholder_package],_show=True)
     # Note project root is automatically installed as editable when doing poetry install.
 
   def pyinit_dot_py_path(self) -> str:
@@ -162,7 +166,7 @@ __version__ = version("{name}")
           print(f"ERROR: incorrect package name in {p}, expecting {t}, BUILD_VERISON.txt has the name '{name}'")
           os._exit(1)
     else:
-      with open(p,"w"):
+      with open(p,"w") as f:
         f.write(text)
     return p
 
@@ -174,7 +178,7 @@ __version__ = version("{name}")
         pyproject.toml and lock file. A major constraint for "requests 2.1.1"
         is "requests^2.1.1" which means any version >=2.1.1 and < 3.0.0.
     """
-    self.pysyncvenv() # Sync venv first before add packages.
+    self.pysync() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
     p = self.findproject(name=package) # Look for a local package.
     if p:
@@ -190,23 +194,23 @@ __version__ = version("{name}")
         print(f"warning: {wheel} does not exit")
         self.pypackage()
       os.chdir(cwd)
-      self._cmd([self.poetry_p,"add","--group","wsdev",p,"--editable"],_show=True)
-      self._cmd([self.poetry_p,"add","--group","wsprod",wheel],_show=True)
-      self._cmd([self.poetry_p,"add","--group","prod",f'"{package}=={version}"'],_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_prod",f'"{package}=={version}"'],_show=True)
       return
     # pypi package.
     if version:
       self._cmd([self.poetry_p,"add","--group","main",f'"{package}=={version}"'],_show=True)
     else:
-      self._cmd([self.poetry_p,"add","--group","main",f'"{package}"'],_show=True)
+      self._cmd([self.poetry_p,"add","--group","main",package],_show=True)
 
   def pyuninstall(self,package:str) -> str:
     """ pyproject.toml, venv, and lock file - remove package. """
-    self._cmd([self.poetry_p,"remove",package],fail=False,_show=True)
-    self._cmd([self.poetry_p,"remove","--group","dev",package],fail=False,_show=True)
-    self._cmd([self.poetry_p,"remove","--group","swdev",package],fail=False,_show=True)
-    self._cmd([self.poetry_p,"remove","--group","swprod",package],fail=False,_show=True)
-    self._cmd([self.poetry_p,"remove","--group","prod",package],fail=False,_show=True)
+    print(self._cmdstr([self.poetry_p,"remove",package],fail=False,_show=True,stderr=True))
+    print(self._cmdstr([self.poetry_p,"remove","--group","dev",package],fail=False,_show=True,stderr=True))
+    print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_wsdev",package],fail=False,_show=True,stderr=True))
+    print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_wsprod",package],fail=False,_show=True,stderr=True))
+    print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_prod",package],fail=False,_show=True,stderr=True))
 
   def pyupdateminor(self,package:str) -> str:
     """ venv and lock file - update package to the latest minor version. """
@@ -222,34 +226,40 @@ __version__ = version("{name}")
       os._exit(1)    
     self._cmd([self.poetry_p,"add",package],_show=True)
 
-  def pysyncvenv(self) -> None:
-    """ Sync pyproject.toml and lockfile and venv, so packages can be added
-    and removed.
-    Check developer packages for local paths.
+  def pysync(self) -> None:
+    """ Sync pyproject.toml and lockfile and venv. With editable and
+    non-editable packages found in the inhouse package groups of
+    inhouse_wsdev (editable) and inhouse_wsprod (non-editable).
+    Warning: will remove packages not installed with pyinstall.
     """
-    for line in self._cmd([self.poetry_p,"_show","--top-level","--only","wsdev"],fail=False,_show=True):
-      (package,version,*rest) = line.split()
-      self._cmd([self.poetry_p,"remove","--group","wsdev",package],_show=True)
-    for line in self._cmd([self.poetry_p,"_show","--top-level","--only","wsprod"],fail=False,_show=True):
-      (package,version,*rest) = line.split()
-      p=os.path.join("..",package)
-      if os.path.exists(p):
-        self._cmd([self.poetry_p,"add","--group","wsdev",p,"--editable"],_show=True)
-      else:
-        self._cmd([self.poetry_p,"add","--group","wsdev",f'"{package}=={version}"'],_show=True)
-    if self._cmd([self.poetry_p,"_show","--top-level","--only","wsdev"],fail=False,_show=True):
-      self._cmd([self.poetry_p,"install","--only","wsdev"],_show=True)
-    else:
-      self._cmd([self.poetry_p,"install","--only","main"],_show=True)
+    self._cmdInteractive([self.poetry_p,"lock"],_show=True)
+    self._cmdInteractive([self.poetry_p,"sync","--with","dev,inhouse_wsdev,inhouse_wsprod"],_show=True)
+
+  def pycheck(self) -> str:
+    """ Check sync of pyproject.toml and lockfile and venv. """
+    status = []
+    # --lock check for a lock.file.
+    r = self._cmdstr([self.poetry_p,"check","--lock"],fail=False,_show=False)
+    if not r: status.append("Missing lock")
+    elif "All set" not in r: status.append("toml ahead of lock")
+    r = self._cmdstr([self.poetry_p,"sync","--dry-run","--with","dev,inhouse_wsdev,inhouse_wsprod"],fail=False,_show=False)
+    if not r or "0 installs, 0 updates, 0 removals" not in r: status.append("lock ahead of venv")
+    return "\n".join(status)
+
+  def pypackageshow(self) -> str:
+    """ Check if package needs rebuilding. """
+    if not os.path.exists(self.wheel):
+      return "No package"
+    if self._rebuild_target(self.wheel,[self.toml,"src"],msg=False):
+      return "package behind source\n"+self.pypackaged()
+    return ""
 
   def pypackage(self) -> None:
-    """ Create a Python distribution wheel and tar in download dir. """
+    """ Create a Python distribution wheel and tar in dist dir. """
     if not self._rebuild_target(self.wheel,[self.toml,"src"]):
       print(f"{self.wheel} is up to date")
       return
     self._cmd([self.poetry_p,"version",self.version()],_show=True)
-    self._cmd([self.poetry_p,"lock"],_show=True)
-    self.pysyncvenv()
     self._cmd([self.poetry_p,"build","--format","wheel","--output",self.download],_show=True)
     self._touch(self.wheel)
 
@@ -259,7 +269,7 @@ __version__ = version("{name}")
         self.pyunittest_touchfile,
         [self.toml,"src","docker","example"]):
       return
-    self.pysyncvenv()
+    self.pysync()
     self._cmd([self.poetry_p,"run","pytest","-s","-m","unit"],_show=True)
     self._touch(self.pyunittest_touchfile)
 
@@ -269,7 +279,7 @@ __version__ = version("{name}")
         self.pye2etest_touchfile,
         [self.toml,"src","docker","example"]):
       return
-    self.pysyncvenv()
+    self.pysync()
     # -s to show stdout.
     # -vv stops output being truncated when tests fail and help debugging.
     self._cmdInteractive([self.poetry_p,"run","pytest","-vv","-s","-m","e2e"],_show=True)

@@ -8,10 +8,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.10"
 # main group - packages installed from pypi and never from a local path.
-dependencies = [
-   "texttable",
-   "pyinstaller"
-]
+dependencies = ["texttable (>=1.7.0,<2.0.0)", "rich (>=14.2.0,<15.0.0)"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -20,21 +17,25 @@ build-backend = "poetry.core.masonry.api"
 [dependency-groups]
 # dev group - packages for pytest and pyintegrationtest and installed from pypi.
 dev = [
-  {include-group = "main"},
   "pylint (>=4.0.4,<5.0.0)",
   "pytest (>=9.0.2,<10.0.0)",
   "ruff (>=0.14.10,<0.15.0)",
   "spyder-kernels (==3.1)"
 ]
-# prod group - inhouse packages used by CI/CD job to install packages from pypi.
-prod = [
-  {include-group = "main"}
+# inhouse_prod group - inhouse packages used by CI/CD job to install packages from pypi.
+# inhouse_wsdev group - inhouse packages used in development to install packages as editable from local path.
+# inhouse_wsprod group - inhouse packages used in development to install wheels from local path to test the production install.
+inhouse_wsdev = [
+    "setuptools (>=80.9.0,<81.0.0)"
 ]
-# wsdev group - inhouse packages used in development to install packages as editable from local path.
-wsdev = [
-  {include-group = "dev"}
+inhouse_wsprod = [
+    "setuptools (>=80.9.0,<81.0.0)"
 ]
-# wsprod group - inhouse packages used in development to install wheels from local path to test the production install.
-wsprod = [
-  {include-group = "main"}
+inhouse_prod = [
+    "setuptools (>=80.9.0,<81.0.0)"
+]
+[tool.pytest.ini_options]
+markers = [
+  "e2e: end to end testing, or production testing",
+  "unit: utin testing"
 ]

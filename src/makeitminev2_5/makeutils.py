@@ -10,8 +10,6 @@ class MakeUtils():
   def __init__(self,**kwargs):
     self.cwd = os.getcwd()
     self.home = Path.home()
-    self.bv = "BUILD_VERSION.txt"
-    self.readme = "README.md"
 
   @classmethod
   def _touch(cls,p:str) -> None:
@@ -109,20 +107,20 @@ class MakeUtils():
     return False
 
   @classmethod
-  def _rebuild_target(cls,target:str,dependencies: list) -> bool:
+  def _rebuild_target(cls,target:str,dependencies: list,msg:bool=True) -> bool:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
     if not os.path.exists(target):
-      print(f"target '{target}' does not exist rebuilding")
+      if msg: print(f"target '{target}' does not exist rebuilding")
       return True
     mtime = os.path.getmtime(target)
     for dependency in dependencies:
       if not os.path.exists(dependency):
-        print(f"target '{target}' is out of date, dependency '{dependency}' does not exist assuming it will be built when rebuilding target.")
+        if msg: print(f"target '{target}' is out of date, dependency '{dependency}' does not exist assuming it will be built when rebuilding target.")
         return True
       if cls._newermtime(mtime,dependency):
-        print(f"target '{target}' is out of date, dependency '{dependency}' is older than dependency and needs rebuilding")
+        if msg: print(f"target '{target}' is out of date, dependency '{dependency}' is older than dependency and needs rebuilding")
         return True
-    print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
+    if msg: print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
     return False
 
   @classmethod

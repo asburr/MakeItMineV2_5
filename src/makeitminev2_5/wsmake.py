@@ -9,12 +9,18 @@ from texttable import Texttable
 class WSMake(Make):
   """ Workspace work. """
 
-  def wspjpath(self,pj:str) -> str:
-    ws = self.getpreference(key="ws")
+  def _findproject(self,name:str,version:str=None,root:str=None) -> str:
+    """ Return path to a project in the workspace.
+    :param name: Name of the project.
+    :param version: Version of the project.
+    :param root: Not used when searching the workspace.
+    """
+    ws = self.getpreference("ws")
+    if not ws: return super()._findproject(name,version)
     with open(ws,"r") as f:
-      return self._wsload(json.load(f)).get(pj,None)
+      return self._wsload(json.load(f)).get(name,None)
 
-  def _checkfile(self,file:str) -> bool:
+  def _checkfile(self,file:str) -> str:
     return super()._checkfile(file)
 
   def _release(self) -> None:

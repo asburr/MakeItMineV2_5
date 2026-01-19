@@ -8,7 +8,7 @@ import shutil
 import os
 
 
-class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
+class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
   """ Project make using other makes. """
 
   def upversion(self) -> None:
@@ -52,8 +52,8 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
     table.add_rows(t)
     print(table.draw())
 
-  def status(self) -> None:
-    """ Workflow status for this project. """
+  def workflow(self) -> None:
+    """ Workflow for this project. """
     name = self.name()
     table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
     align = self._work_align()
@@ -67,6 +67,24 @@ class PjMake(WSMake,GtMake,PyMake,DkMake,DJMake):
     table.add_rows(t)
     print(table.draw())
 
+  def touch(self,p:str,contents:str="") -> None:
+    """ Create a file.
+      :param p: path to file
+      :param contents: contents for file
+    """
+    if contents:
+      with open(p,"w") as f:
+        for line in contents.split("\\n"):
+          f.write(line+os.linesep)
+        return
+    self._touch(p)
+
+  def delete(self,p:str) -> None:
+    """ Delete a file.
+      :param p: path to file
+    """
+    if os.path.exists(p):
+      os.remove(p)
 
 if __name__ == "__main__":
   PjMake.main()

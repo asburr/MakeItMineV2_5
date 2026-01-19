@@ -1,16 +1,35 @@
 FROM python:3.10-slim AS base
 
+ARG GID=1000
+RUN groupadd -g $GID usergroup
+
+# Processes in a Linux-based container run as root.
+# Running containers as root is generally discouraged as a best practice for
+# production environments due to potential security vulnerabilities. If a
+# container is compromised, the attacker may have elevated privileges on the
+# host system.
+# The USER instruction is used to set the user for all subsequent RUN, CMD,
+# and ENTRYPOINT instructions.
+# -r creates a system account (or system user) to run the application with
+# limited privileges, improving security by restricting damage if compromised.
+# These accounts have no password, a disabled login shell.
+# -m creates a home directory needed for poetry's cache.
+RUN groupadd -r appgroup && useradd -m -r -g appgroup -s /bin/false appuser
+# Add access to user via the user's group.
+RUN usermod -aG usergroup appuser
+
 # install poetry.
+RUN python -m pip install --upgrade pip
 RUN pip install poetry
-RUN poetry config virtualenvs.create false
 
 RUN adduser git
 # Setup git server filespace.
 ARG REMOTEGIT=/remotegit
 RUN mkdir $REMOTEGIT && chmod a+rwx $REMOTEGIT
 
-# make dir for the MIM tool.
-RUN mkdir -p /projects/MakeItMineV2_5 && chmod -R a+wrx /projects/MakeItMineV2_5
+# Make a local dir for the MIM tool, also /project is the mount point for
+# the host projects which when mounted will hide the local MakeItMake.
+RUN mkdir -p /projects/MakeItMineV2_5 && chmod -R a+wrx /projects
 
 # Install git
 RUN apt-get update && apt-get install -y git
@@ -31,51 +50,47 @@ RUN cat /etc/apt/sources.list.d/docker.list
 RUN apt-get update
 RUN apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Processes in a Linux-based container run as root.
-# Running containers as root is generally discouraged as a best practice for
-# production environments due to potential security vulnerabilities. If a
-# container is compromised, the attacker may have elevated privileges on the
-# host system.
-# The USER instruction is used to set the user for all subsequent RUN, CMD,
-# and ENTRYPOINT instructions.
-# -r creates a system account (or system user) to run the application with
-# limited privileges, improving security by restricting damage if compromised.
-# These accounts have no password, a disabled login shell.
-# -m creates a home directory needed for poetry's cache.
-RUN groupadd -r appgroup && useradd -m -r -g appgroup -s /bin/false appuser
+ARG LOCAL=/test_projects
+RUN mkdir -p $LOCAL/testing && chown -R appuser:appgroup $LOCAL
 RUN usermod -aG docker appuser
-USER appuser
 
-# Create a "remote" repo for MakeItMine.
-ARG MIMREMOTE=$REMOTEGIT/MakeItMine
-RUN mkdir $MIMREMOTE && chmod a+rwx $MIMREMOTE
+# Create a location for the remote repo for the testing project.
+ARG REMOTE=$REMOTEGIT/testing
+RUN mkdir $REMOTE && chmod a+rwx $REMOTE
+
+# Create the local repo for the testing project.
+COPY docker/artifacts $LOCAL/testing
+RUN git config --global --add safe.directory $LOCAL/testing
 
 FROM base AS projectbase
 
-# Make a new local repo from the MakeItMine repo - remove the .git directory.
-COPY --chown=appuser:appgroup . /MakeItMine
-RUN rm -rf /MakeItMine/.git
-
-# Now create the actual repo which is mounted over in devlopment.
-# Make a new local repo from the MakeItMine repo - remove the .git directory.
-# By default in a Unix-like environment (including containers),
-# Poetry creates its cache and virtual environments within the user's
-# home directory.
-COPY --chown=appuser:appgroup . /projects/MakeItMineV2_5
-RUN git config --global --add safe.directory /projects/MakeItMineV2_5
+# Install MakeItMine as a local repo, this is also the mount point for the host
+# version of the repo and while mounted it will hide the actual repo until
+# the mount is lost.
+COPY . /projects/MakeItMineV2_5
+RUN chown -R appuser:appgroup /projects
+RUN chown -R appuser:appgroup $LOCAL
+RUN chown -R appuser:appgroup $REMOTE
 
 FROM projectbase AS development
 
-# The following install of the dependencies occurs in poetry's cache at users
-# home.
 WORKDIR /projects/MakeItMineV2_5
-RUN poetry install --with wsdev
-WORKDIR /MakeItMine
+USER appuser
+# Config is written to ~/.config/pypoetry/config.toml
+RUN poetry config virtualenvs.in-project true
+# Using the default poetry configuration, the install occurs in poetry's cache
+# found in .cache in users home directory.
+RUN poetry install --with dev,inhouse_wsdev
+WORKDIR $LOCAL/testing
 
 FROM projectbase AS production
 
-# Install dependencies local wheels as production packages, but editable still
-# for the local project.
 WORKDIR /projects/MakeItMineV2_5
-RUN poetry install --with wsprod
-WORKDIR /MakeItMine
+USER appuser
+# Config is written to ~/.config/pypoetry/config.toml
+RUN poetry config virtualenvs.in-project true
+# Install dependencies from local wheels and/or pypi/poetry cache, then
+# use pip to install the wheel for the local project (called root by poetry).
+RUN poetry install --with inhouse_wsprod --no-root
+RUN pip install .download/*.whl
+WORKDIR $LOCAL/testing

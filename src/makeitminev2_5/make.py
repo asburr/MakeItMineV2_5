@@ -12,6 +12,8 @@ class Make(ABC,MakeUtils):
   
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
+    self.bv = "BUILD_VERSION.txt"
+    self.readme = "README.md"
     self.preferences = os.path.join(Path.home(),".makeitmine.json")
 
   @abstractmethod
@@ -20,33 +22,23 @@ class Make(ABC,MakeUtils):
     return []
 
   @abstractmethod
-  def wspjpath(self,pj:str) -> str:
-    """ Project is part of the users workspace and project is
-    available locally at the returned path.
-    :param pj: project name.
-    """
-    return None
-
-  @abstractmethod
-  def _checkfile(self,file:str) -> bool:
+  def _checkfile(self,file:str) -> str:
     """ Check the syntax and semantics in a file """
     if file.endswith(".json"):
       with open(file,"r",encoding='utf-8') as f:
         try:
           json.load(f)
         except Exception as e:
-          print(f"{file} bad json syntax error is {e}")
-          return False
-    return True
+          return f"{file} bad json syntax error is {e}"
 
-  def checkfile(self,file:str) -> bool:
+  def checkfile(self,file:str) -> str:
     """ Check the syntax in a file
     :param file: Path to the file to be checked
     """
     touch = os.path.join(os.path.dirname(file),f".{os.path.basename(file)}.touch")
-    if not self._rebuild_target(touch,[file]): return True
+    if not self._rebuild_target(touch,[file]): return None
     r = self._checkfile(file)
-    self._touch(touch)
+    if not r: self._touch(touch)
     return r
 
   @abstractmethod
@@ -143,32 +135,42 @@ class Make(ABC,MakeUtils):
         if m:
           return m.group(2)
 
-  def findproject(self,name:str,version:str=None,path:str=None) -> str:
+  def _findproject(self,name:str,version:str=None,root:str=None) -> str:
     """ Find a project in the users home directory.
     :param name: Name of the project.
     :param version: Version of the project.
-    :return path: path to the project.
+    :param root: Where to start looking for the project, will search subdirs.
     """
-    if not path: path=Path.home()
+    if not root: root=Path.home()
     ignore = self.ignorepaths()
-    for e in os.listdir(path):
-      p = os.path.join(path,e)
+    for e in os.listdir(root):
+      p = os.path.join(root,e)
       if os.path.isfile(p):
         if e != self.bv: continue
-        os.chdir(path)
-        if self.name() == name:
-          if version and self.version() != version:
-            print(f"{path} has version {self.version()} expecting to find {version}")
-            os._exit(1)
-          return path
+        os.chdir(root)
+        if self.name() == name: return root
         os.chdir(self.cwd)
         return None # This is a project root, don't scan subdirs.
-      else:
+      elif os.path.isdir(p):
         if e.startswith("."): continue
         if e in ignore: continue
-        p = self.findproject(name,version,path=p)
+        p = self._findproject(name,version,root=p)
         if p: return p
-    
+
+  def findproject(self,name:str,version:str=None) -> str:
+    """ Find a project in the users workspace.
+    :param name: Name of the project.
+    :param version: Version of the project.
+    """
+    p = self._findproject(name,version)
+    if p:
+      if version:
+        os.chdir(p)
+        if self.version() != version:
+          print(f"{p} has version {self.version()} expecting to find {version}")
+          os._exit(1)
+    return p
+
   def README_dot_txt(self) -> None:
     """ Creates the standard README.md. """
     if os.path.exists(self.readme):

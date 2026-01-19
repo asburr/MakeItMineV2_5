@@ -10,7 +10,7 @@ class DkMake(Make):
 
   def _checkfile(self,file:str) -> bool:
     if file.endswith("Dockerfile"):
-      self.dkbuild()
+      return self.dkbuild(check=True)
     return super()._checkfile(file)
 
   def __init__(self,**kwargs):
@@ -99,7 +99,7 @@ Hint:
       print("Note: must 'Add Docker’s official GPG key' and 'Set up the repository' before installing the plugin")
       sys.exit(1)
 
-  def dkbuild(self,buildargk:list[str]=[],buildargv:list[str]=[],secret:str=None,check:bool=False) -> None:
+  def dkbuild(self,buildargk:list[str]=[],buildargv:list[str]=[],secret:str=None,check:bool=False,force:bool=False) -> None:
     """ Build container using docker/Dockerfile.
       :param buildargk: Keys for build-arg.
       :param buildargv: Values for build-arg.
@@ -108,7 +108,7 @@ Hint:
     """
     touchfile=os.path.join("docker",".dkbuild.touch")
     # TODO; how to add python package deps.
-    if not check and not self._rebuild_target(touchfile, [self.dkf]): return
+    if not check and not force and not self._rebuild_target(touchfile, [self.dkf]): return
     self.dkcheck()
     name = self.name()
     version = self.version()
@@ -120,7 +120,9 @@ Hint:
         if m:
           id = m.group(1)
           if not secret or f"id={id}," not in secret:
-            print(f"ERROR, expecting: --secret id={id},src=<path> - see {self.dkf}")
+            m = f"ERROR, expecting: --secret id={id},src=<path> - see {self.dkf}"
+            if check: return m
+            print(m);
             sys.exit(1)
         m = re.search('^ARG ([^= #]*).*',line)
         if m:
@@ -133,33 +135,50 @@ Hint:
             v= exec(p, globals(), results)
             v = results.get("x")
             if v is None:
-              print(f"ERROR in {self.dkf} in python: {p}")
+              m = f"ERROR in {self.dkf} in python: {p}"
+              if check: return m
+              print(m)
               os._exit(1)
-            cmd.append("--build-arg")
-            cmd.append(f"{k}={v}")
+            cmd.append("--build-arg"); cmd.append(f"{k}={v}")
           elif not re.match(".*=.*",line):
             if k not in buildargk:
-              print(f"ERROR, expecting: --buildargk {k} --buildargv <value> {line}")
+              m = f"ERROR, expecting: --buildargk {k} --buildargv <value> {line}"
+              if check: return m
+              print(m)
               sys.exit(1)
     for k,v in zip(buildargk,buildargv):
-      cmd.append("--build-arg")
-      cmd.append(f"{k}={v}")
+      cmd.append("--build-arg"); cmd.append(f"{k}={v}")
+    cmd.append("--build-arg"); cmd.append(f"GID={os.getresgid()[0]}")
     if secret:
       for s in secret.split(";"):
-        cmd.append("--secret")
-        cmd.append(s)
+        cmd.append("--secret"); cmd.append(s)
     cmd += ["-f",self.dkf]
-    self._cmdInteractive(cmd + [
-      "-t",f"{name}_prod:{version}",
-      "--progress=plain",
-      "--target","production","."],_show=True)
-    self._cmdInteractive(cmd + [
-      "-t",f"{name}_dev:{version}",
-      "--progress=plain",
-      "--build-context","projects=../../projects",
-      "--target","development","."
-      ],_show=True)
-    if check: return
+    if check:
+      r = ""
+      s = self._cmdstr(cmd + [
+        "-t",f"{name}_prod:{version}",
+        "--progress=plain",
+        "--target","production","."],_show=False)
+      if "Check complete, no warnings found" not in s: r += s
+      s += self._cmdstr(cmd + [
+        "-t",f"{name}_dev:{version}",
+        "--progress=plain",
+        "--build-context","projects=../../projects",
+        "--target","development","."
+        ],_show=False)
+      if "Check complete, no warnings found" not in s: r += s
+      return r
+    else:
+      self._cmdInteractive(cmd + [
+        "-t",f"{name}_prod:{version}",
+        "--progress=plain",
+        "--target","production","."],_show=True)
+      self._cmdInteractive(cmd + [
+        "-t",f"{name}_dev:{version}",
+        "--progress=plain",
+        "--build-context","projects=../../projects",
+        "--target","development","."
+        ],_show=True)
     # Removes all stopped containers, all networks not used by at least one
     # container, all dangling images (untagged image layers that are no
     # longer used by any images), and unused build cache. 
@@ -266,7 +285,7 @@ Hint:
     self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
                 "logs"]+p,_show=True)
 
-  def dkexec(self,cmd:str,service:str=None) -> None:
+  def dkexec(self,cmd:str,service:str=None,user:str=None) -> None:
     """ Run a command inside a service started by compose.yaml
     :param cmd: Command to run inside the container
     :param service: Optional name of the service to identify the container. Default expects one service and selects that.
@@ -285,8 +304,11 @@ Hint:
         print(f"{services} running services, please select service using option --container")
         return
       service=services[0]
-    self._cmdInteractive(["docker","compose","-f",self.dkdc,"--env-file",self.dkdr,
-                "exec",service,cmd],_show=True)
+    c = ["docker","compose","-f",self.dkdc,"--env-file",self.dkdr]
+    c += ["exec","-it"]
+    if user: c += ["-u",user]
+    c += [service,cmd]
+    self._cmdInteractive(c,_show=True)
 
   def dkup(self) -> None:
     """ Run the services in example/docker-compose.yml """

@@ -1,25 +1,28 @@
 # MakeItMine (MIM)
-MIM provides preconfigured and fixed workflows for software development.
-## gtmake
+MIM provides build automation called targets for software development workflows.
+## git targets
 Git Trunk Based Dev with developer branches but support without developer branches.
 
-Tasks: gtsetup, gtadd, gtrebaseremote, gtdiff, gtpush, gtrelease.
+Targets: gtsetup(location,name,email), gtadd(), gtrebaseremote(), gtdiff(),
+gtpush(), gtrelease().
 
 Tasks for developer branch: gtbranch, gtrebasemain
-## dkmake
+## Docker targets
 Multi-Stage Dockerfile. Host Volume Mounting docker-compose for development.
 Env Driven docker-compose.
 
-Tasks: dkbuild, dkup, dklogs, dkdown
-## pymake
-Python development using Poetry package-mode with virtualenv. Using
-Poetry Dependency-Group for dev and prod dependencies.
+Targets: dkbuild, dkup, dklogs, dkdown
+## Python targets
+Python development using Poetry in the Package-Mode, using Dependency-Groups
+to manage the separation of dev and prod dependencies.
 
-Tasks: pyinstall, pyuninstall, pypackage, pyunittest, pye2etest.
-## wsmake
-Workspace is mlutiple local projects.
+Targets: pyinstall(package,version), pyuninstall(package), pypackage(),
+pyunittest(), pye2etest().
+## Workspace targets
+Workspace is a collection of local projects being changed at the sametime.
 
-Tasks: wsset(ws), ws(), wsadd(pj,path), wsrm(pj), wswork(pj), wsrun(cmd,pj,args,kwargs)
+Targets: wsset(ws), ws(), wsadd(pj,path), wsrm(pj), wswork(pj),
+wsrun(cmd,pj,args,kwargs)
 ## Getting Started
 ### Dependencies
 MIM has been tested with Linux distributions, Ubuntu and Debian.

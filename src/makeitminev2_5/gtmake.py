@@ -8,7 +8,7 @@ class GtMake(Make):
   based developement is working on temporary branches directly off main.
   """
 
-  def _checkfile(self,file:str) -> bool:
+  def _checkfile(self,file:str) -> str:
     return super()._checkfile(file)
 
   def _upversion(self,pj:str,version:str,oldversion:str) -> str:
@@ -37,18 +37,18 @@ class GtMake(Make):
   def _workTitles(self) -> list:
     """ Titles for work """
     return super()._workTitles()+[
-      "gtinitshow\ngtsetup",
+      "gtsetupshow\ngtsetup",
       "gtuntracked\nlocal>local\ngtadd",
       "gtmainahead\nmain>local\ngtrebasemain",
       "gtremoteahead\nremote>local\ngtrebaseremote",
-      "gtuncommitted\nchange>local\ngtdiff, gtpush",
+      "gtuncommitted\nlocal>remote\ngtdiff, gtpush",
       "gtremotebehind\nlocal>remote\ngtpush",
       "gtmainbehind\nremote>main\ngtrelease"]
 
   def _work(self) -> list:
     """ Gather project work """
     if not self.gtrepo(_show=False):
-      return super()._work()+["no repo","","","","","",""]
+      return super()._work()+["not a repo","","","","","",""]
     email = self._cmdstr(["git","config","--global","user.email"],_show=False)
     if not email:
       return super()._work()+["no email","","","","","",""]
@@ -107,8 +107,11 @@ class GtMake(Make):
     """ Name of the local branch """
     return self._cmd(["git","branch","--show-current"])[0]
 
-  def gtclone(self,url:str,pj:str=None) -> None:
-    """ clone repo """
+  def gtclone(self,url:str,pj:str) -> None:
+    """ clone repo
+      :param url: URL for remote repo that is to be cloned.
+      :param pj: local name for the repo being cloned.
+    """
     if os.path.exists(pj):
       print(f"ERROR: {pj} already exists")
       os._exit(1)
@@ -118,9 +121,10 @@ class GtMake(Make):
       os._exit(1)
     self._cmd(["git","clone",url,pj],_show=True)
 
-  def gtbranch(self,branch:str) -> None:
+  def gtbranch(self,branch:str,tag:str=None) -> None:
     """ Switch to a branch. Create branch locally if it does not exist.
         :param branch: the name of the branch
+        :param tag: optional tag where the branch should start.
     """
     localbranch = self.gtlocalbranch()
     if localbranch == branch:
@@ -134,7 +138,14 @@ class GtMake(Make):
     if branch == "main":
       print("Cannot create main branch")
       return
-    self._cmd(["git","branch",branch],_show=True)
+    if tag:
+      tags = self._cmd(["git","tag"],_show=True)
+      if tag not in tags:
+        print(f"no tag called '{tag}', available tags {tags}")
+        os._exit(1)
+        self._cmd(["git","switch","-c",branch,tag],_show=True)
+    else:
+      self._cmd(["git","branch",branch],_show=True)
     self._cmd(["git","switch",branch],_show=True)
 
   def gttrackingremotebranch(self) -> bool:
@@ -145,13 +156,18 @@ class GtMake(Make):
       if "origin" == branch: return True
     return False
 
-  def gtpush(self) -> None:
-    """ Commit and push to remote branch """
+  def gtpush(self,force:bool=False) -> None:
+    """ Commit and push to remote branch
+    :param force: switches off file checking
+    """
     files = self.gtuncommittedfiles()
     if files:
       for file in files.split():
-        if not self.checkfile(file):
-          return
+        if not force:
+          r = self.checkfile(file)
+          if r:
+            print(r)
+            return
       self._cmdInteractive(["git","commit","-a"],_show=True)
     localbranch = self.gtlocalbranch()
     if not self.gttrackingremotebranch():
@@ -242,7 +258,7 @@ class GtMake(Make):
     status = self._cmd(["git","status"],_show=_show,fail=False,stderr=True)
     return not self._substring("fatal: not a git repository",status)
 
-  def gtsetupshow(self,name:str,email:str) -> None:
+  def gtsetupshow(self) -> None:
     """ Show the status of the local repo with user name and email. """
     if not self.gtrepo():
       print(f"{os.getcwd()} is not a repo, run gtsetup")
@@ -263,7 +279,6 @@ class GtMake(Make):
     """
     if name: self._cmd(["git","config","--global","user.name",name],_show=True)
     if email: self._cmd(["git","config","--global","user.email",email],_show=True)
-    self._cmd(["git","config","pull.rebase","false"],_show=True)    
     if location:
       if self.gtrepo():
         print(f"ERROR: {self.cwd} is a git project")
@@ -282,6 +297,7 @@ class GtMake(Make):
       # convention for a remote repo.
       self._cmd(["git","remote","add","origin",location],_show=True)
       self._cmd(["git","push","-u","origin","main"],_show=True)
+    self._cmd(["git","config","pull.rebase","false"],_show=True)    
 
   def gtsetremote(self,url:str) -> None:
     """ Change set remote URL for a local repo.
@@ -378,7 +394,6 @@ class GtMake(Make):
     branch = self.gtlocalbranch()
     a = self._cmd(["git","log","--date=unix","--pretty=format:%ad %an",f"{branch}..origin/{branch}"],_show=_show)
     if not a: return f"0/files\n{branch}/br"
-    print(a)
     a=a[-1].split(" ")
     d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - int(a[0]))
     dd = d.days
@@ -400,8 +415,16 @@ class GtMake(Make):
 
   def gtuntracked(self,_show:bool=True) -> str:
     """ Untracked local files. """
-    cnt = len(self._cmd(["git","ls-files","--others","--exclude-standard"],_show=_show))
-    return f'{cnt}/files'
+    files = self._cmd(["git","ls-files","--others","--exclude-standard"],_show=_show)
+    if not files: return "0/files"
+    files = [os.path.getmtime(file) for file in files if os.path.exists(file)]
+    cnt = len(files)
+    oldest = min(files)
+    d = datetime.timedelta(seconds=datetime.datetime.now().timestamp() - oldest)
+    dd = d.days
+    hh = d.seconds//3600
+    mm = (d.seconds//60)%60
+    return f'{cnt}/files\n{dd:>02d}d:{hh:>02d}H:{mm:>02d}M/age'
 
   def gtuntrackedfiles(self,_show:bool=True) -> str:
     """ Untracked local files. """
@@ -472,3 +495,9 @@ class GtMake(Make):
 
   def gtfetch(self,_show=True) -> bool:
     return self._cmd(["git","fetch"],fail=False,_show=_show)
+
+  def gttag(self) -> None:
+    """ Adds a local lightweight tag (one without a comment) to the last commit.
+      Lightweight tags remain local and are not pushed to the remote branches.
+    """
+    self._cmd(["git","tag",self.version()])
