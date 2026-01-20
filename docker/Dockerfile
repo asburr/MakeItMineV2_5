@@ -76,8 +76,6 @@ FROM projectbase AS development
 
 WORKDIR /projects/MakeItMineV2_5
 USER appuser
-# Config is written to ~/.config/pypoetry/config.toml
-RUN poetry config virtualenvs.in-project true
 # Using the default poetry configuration, the install occurs in poetry's cache
 # found in .cache in users home directory.
 RUN poetry install --with dev,inhouse_wsdev
@@ -87,8 +85,6 @@ FROM projectbase AS production
 
 WORKDIR /projects/MakeItMineV2_5
 USER appuser
-# Config is written to ~/.config/pypoetry/config.toml
-RUN poetry config virtualenvs.in-project true
 # Install dependencies from local wheels and/or pypi/poetry cache, then
 # use pip to install the wheel for the local project (called root by poetry).
 RUN poetry install --with inhouse_wsprod --no-root

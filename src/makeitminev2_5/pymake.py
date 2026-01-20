@@ -82,9 +82,7 @@ class PyMake(Make,MakeUtils):
 
   def pyproject_dot_toml(self) -> str:
     """ Create pyproject.toml if one does not exists. """
-    if os.path.exists(self.toml):
-      print(f'{self.toml} exists')
-      return
+    if not self._rebuild_target(self.toml,[]): return
     self.README_dot_txt()
     name = os.path.basename(self.cwd)
     with open(self.toml,"w") as f:
@@ -106,13 +104,15 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 # dev group - packages for pytest and pyintegrationtest and installed from pypi.
-dev = []
+dev = ["pytest"]
 # inhouse_prod group - inhouse packages used by CI/CD job to install packages from pypi.
-inhouse_prod = []
+inhouse_prod = ["setuptools"]
 # inhouse_wsdev group - inhouse packages used in development, install packages as editable from local path.
-inhouse_wsdev = []
+inhouse_wsdev = ["setuptools"]
 # inhouse_wsprod group - inhouse packages used in development, install wheels from local path to test the production install.
-inhouse_wsprod = []
+inhouse_wsprod = ["setuptools"]
+
+[tool.pytest.ini_options]
 markers = [
   "e2e: end to end testing, or production testing",
   "unit: utin testing"
@@ -232,6 +232,7 @@ __version__ = version("{name}")
     inhouse_wsdev (editable) and inhouse_wsprod (non-editable).
     Warning: will remove packages not installed with pyinstall.
     """
+    self.pyproject_dot_toml()
     self._cmdInteractive([self.poetry_p,"lock"],_show=True)
     self._cmdInteractive([self.poetry_p,"sync","--with","dev,inhouse_wsdev,inhouse_wsprod"],_show=True)
 

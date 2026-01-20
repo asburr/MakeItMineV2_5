@@ -1,22 +1,24 @@
 from makeitminev2_5.makeutils import MakeUtils
 import os
 import pytest
+from pathlib import Path
 
 
 @pytest.mark.e2e
 class Test_makeitmine():
 
   exe = ["docker-compose","-f","compose.yaml","--env-file","dkrun_release.env",
-         "exec", "-w","/MakeItMine","-it", "gitserver"]
+         "exec", "-it", "gitserver"]
   R=os.path.join("/","remotegit","testing")
   L=os.path.join("/","test_projects","testing")
+  lm=os.path.join(Path.home(),"projects","MakeItMineV2_5","MakeItMine.sh")
   m=os.path.join("/","projects","MakeItMineV2_5","MakeItMine.sh")
   x=MakeUtils()
   testpy = "src/testing/testing.py"
 
   @classmethod
   def lcmd(cls,cmd:list,fail:bool,_show:bool) -> any:
-    return cls.x._cmdInteractive([cls.m]+cmd,fail=fail,_show=_show)
+    return cls.x._cmdInteractive([cls.lm]+cmd,fail=fail,_show=_show)
 
   @classmethod
   def rcmd(cls,cmd:list,fail:bool,_show:bool) -> any:
@@ -31,12 +33,10 @@ class Test_makeitmine():
   def teardown_class(cls):
     cls.lcmd(["dkdown"],fail=False,_show=True)
 
-  @pytest.mark.skip
   def test_container(self):
     r = self.rcmd(["whoami"],fail=True,_show=True)
     assert r=="appuser"
 
-  @pytest.mark.skip
   def test_status_norepo(self):
     r = self.rcmd([self.m,"work"],fail=True,_show=True)
     assert "gtsetupshow" in r
@@ -45,16 +45,12 @@ class Test_makeitmine():
 
   def test_repo(self):
     """ workflow #1: create a remote repo. """
-    os._exit(1)
     self.rcmd([self.m,"gtremoterepo",self.R],fail=True,_show=True)
 
   def test_gtsetup(self):
     """ workflow #2: create a local repo that is connected to the remote repo. """
     self.rcmd([self.m,"gtsetup","--location",self.R,"--name","appuser",
                "--email","appuser@appgroup.test"],fail=True,_show=True)
-
-  @pytest.mark.skip
-  def test_status_newrepo(self):
     r = self.rcmd([self.m,"work"],fail=True,_show=True)
     assert "gtinitshow" not in r
     assert "gtsetup" not in r
@@ -85,7 +81,6 @@ class Test_makeitmine():
     assert "pysync" not in r
     assert "Missing lock" not in r
 
-  @pytest.mark.skip
   def test_checkfile(self):
     contents="import os\nimport datetime #Not used\nos.getcwd()\nx = y + 1 # y not defined\nos.junk() # no method"
     self.rcmd([self.m,"touch",self.testpy,"--contents",contents],fail=True,_show=True)
@@ -102,7 +97,6 @@ class Test_makeitmine():
     assert "pypackage" not in r
 
   def test_dkbuild(self):
-    os._exit(1)
     r = self.rcmd([self.m,"work"],fail=True,_show=True)
     assert "dkbuild" in r
     r = self.rcmd([self.m,"dkbuild"],fail=True,_show=True)

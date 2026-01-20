@@ -173,8 +173,7 @@ class Make(ABC,MakeUtils):
 
   def README_dot_txt(self) -> None:
     """ Creates the standard README.md. """
-    if os.path.exists(self.readme):
-      return
+    if self._rebuild_target(self.readme,[]): return
     with open(self.readme,"w") as f:
       f.write("""
 # Project Title

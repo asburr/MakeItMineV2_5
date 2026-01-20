@@ -158,7 +158,7 @@ class GtMake(Make):
 
   def gtpush(self,force:bool=False) -> None:
     """ Commit and push to remote branch
-    :param force: switches off file checking
+    :param force: without file checking
     """
     files = self.gtuncommittedfiles()
     if files:

@@ -10,8 +10,6 @@ services:
        source: ${HOME}/projects
        target: /projects
        read_only: false
-     - type: volume
-       target: /projects/MakeItMineV2_5/.cache
      - type: bind
        source: /var/run/docker.sock
        target: /var/run/docker.sock
