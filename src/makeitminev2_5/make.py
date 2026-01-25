@@ -148,7 +148,8 @@ class Make(ABC,MakeUtils):
       if os.path.isfile(p):
         if e != self.bv: continue
         os.chdir(root)
-        if self.name() == name: return root
+        n = self.name()
+        if n == name: return root
         os.chdir(self.cwd)
         return None # This is a project root, don't scan subdirs.
       elif os.path.isdir(p):
@@ -157,12 +158,13 @@ class Make(ABC,MakeUtils):
         p = self._findproject(name,version,root=p)
         if p: return p
 
-  def findproject(self,name:str,version:str=None) -> str:
+  def findproject(self,name:str,version:str=None,root:str=None) -> str:
     """ Find a project in the users workspace.
     :param name: Name of the project.
     :param version: Version of the project.
+    :param root: search from this root otherwise root is home dir.
     """
-    p = self._findproject(name,version)
+    p = self._findproject(name,version,root)
     if p:
       if version:
         os.chdir(p)
@@ -173,7 +175,7 @@ class Make(ABC,MakeUtils):
 
   def README_dot_txt(self) -> None:
     """ Creates the standard README.md. """
-    if self._rebuild_target(self.readme,[]): return
+    if not self._rebuild_target(self.readme,[]): return
     with open(self.readme,"w") as f:
       f.write("""
 # Project Title

@@ -82,8 +82,8 @@ class PyMake(Make,MakeUtils):
 
   def pyproject_dot_toml(self) -> str:
     """ Create pyproject.toml if one does not exists. """
-    if not self._rebuild_target(self.toml,[]): return
     self.README_dot_txt()
+    if not self._rebuild_target(self.toml,[]): return
     name = os.path.basename(self.cwd)
     with open(self.toml,"w") as f:
       f.write(f"""
@@ -121,6 +121,7 @@ markers = [
     self._cmd([self.poetry_p,"add","--group","dev","pylint"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","ruff"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","pytest"],_show=True)
+    self._cmd([self.poetry_p,"add","--group","dev","pytest-dependency"],_show=True)
     self._cmd([self.poetry_p,"add","--group","dev","spyder-kernels==3.1"],_show=True)
     placeholder_package = "setuptools" # so groups are not empty.
     self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",placeholder_package],_show=True)
@@ -170,17 +171,26 @@ __version__ = version("{name}")
         f.write(text)
     return p
 
-  def pyinstall(self,package:str,version:str=None) -> str:
+  def pywheel(self) -> str:
+    """ Return the path to the wheel. """
+    return os.path.join(
+      Path.cwd(),".download",f"{self.name()}-{self.version()}-py3-none-any.whl")
+
+  def pyinstall(self,package:str,version:str=None,root:str=None) -> str:
     """ install a package into pyproject.toml, venv, and lock file.
         :param package: name of the package to install. Locally installed when package is detected by "wspackage".
         :param version: defaults to latest version in pypi, or the version of the local package. When version is specified it must exist in pypi, or must match the version in the local package.
+        :param root: root of the project to install but default is CWD or in workspace if using those.
         Note that for 3rdparty packages, poetry creates a major constraint in
         pyproject.toml and lock file. A major constraint for "requests 2.1.1"
         is "requests^2.1.1" which means any version >=2.1.1 and < 3.0.0.
     """
+    if self.name() == package:
+      print(f"ERROR:Cannot install {package} to the project with the same name.")
+      os._exit(1)
+    p = self.findproject(name=package,root=root) # Look for a local package.
     self.pysync() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
-    p = self.findproject(name=package) # Look for a local package.
     if p:
       # Local package.
       cwd = Path.cwd()
@@ -189,10 +199,11 @@ __version__ = version("{name}")
       if v != version:
         print(f"warning: {package} local version is {v}")
         version = v
-      wheel = f"{p}/dist/{package}-{version}-py3-none-any.whl"
+      self.pypackage()
+      wheel = self.pywheel()
       if not os.path.exists(wheel):
-        print(f"warning: {wheel} does not exit")
-        self.pypackage()
+        print(f"ERROR: {wheel} does not exit")
+        os._exit(1)
       os.chdir(cwd)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],_show=True)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],_show=True)
@@ -240,6 +251,8 @@ __version__ = version("{name}")
     """ Check sync of pyproject.toml and lockfile and venv. """
     status = []
     # --lock check for a lock.file.
+    if not os.path.exists(self.toml):
+      status.append("Missing pyproject.toml")      
     r = self._cmdstr([self.poetry_p,"check","--lock"],fail=False,_show=False)
     if not r: status.append("Missing lock")
     elif "All set" not in r: status.append("toml ahead of lock")

@@ -16,7 +16,7 @@ class WSMake(Make):
     :param root: Not used when searching the workspace.
     """
     ws = self.getpreference("ws")
-    if not ws: return super()._findproject(name,version)
+    if not ws: return super()._findproject(name,version,root)
     with open(ws,"r") as f:
       return self._wsload(json.load(f)).get(name,None)
 
@@ -165,6 +165,8 @@ class WSMake(Make):
     kwargs key=value arguments for the command being run.
     :param cmd: command to run over all of the projects in the workspace.
     :param pj: project name, defaults to current directory.
+    :param args: arguments for cmd.
+    :param kwargs: keyword arguments for cmd.
     """
     r = None
     ws = self._getws()

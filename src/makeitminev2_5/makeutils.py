@@ -47,6 +47,14 @@ class MakeUtils():
     return "\n".join(retval)
 
   @classmethod
+  def _grep_match(cls,fn:str,pattern:str) -> re.Match:
+    """ util: Yield Match for each line in file that matches pattern. """
+    with open(fn,"r") as i:
+      for line in i:
+        m = re.match(pattern,line)
+        if m: yield m
+
+  @classmethod
   def _append(cls,fn:str,line:str) -> None:
     """ util: append line to file. """
     with open(fn,"a") as f:

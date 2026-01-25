@@ -9,8 +9,11 @@ class DkMake(Make):
   """
 
   def _checkfile(self,file:str) -> bool:
-    if file.endswith("Dockerfile"):
+    if file == "Dockerfile":
       return self.dkbuild(check=True)
+    if os.path.basename(file) == "Dockerfile":
+      self._cmd(["docker","build","--check",os.path.dirname(file)],
+                fail=True,_show=True,stderr=True)
     return super()._checkfile(file)
 
   def __init__(self,**kwargs):
@@ -107,8 +110,11 @@ Hint:
       :param check: checks the Dockerfile and does not build anything.
     """
     touchfile=os.path.join("docker",".dkbuild.touch")
-    # TODO; how to add python package deps.
-    if not check and not force and not self._rebuild_target(touchfile, [self.dkf]): return
+    dependencies = [self.dkf]
+    # Scan dockerfile for additional dependencies.
+    for m in self._grep_match(self.dkf,"#\s*MIM:\s*rebuild_target:\s*(.*)\s*=\s*(.*)"):
+      if m.group(1) == "dockerfile": dependencies.append(m.group(2))
+    if not check and not force and not self._rebuild_target(touchfile,dependencies): return
     self.dkcheck()
     name = self.name()
     version = self.version()
@@ -127,6 +133,7 @@ Hint:
         m = re.search('^ARG ([^= #]*).*',line)
         if m:
           k = m.group(1).strip()
+          if k in ["UID","GID"]: continue
           m = re.search('.*:python (.*):.*',line)
           if m:
             # exec support muiltiple statments and returns nothing but must set x for "or x" to work.
@@ -148,7 +155,6 @@ Hint:
               sys.exit(1)
     for k,v in zip(buildargk,buildargv):
       cmd.append("--build-arg"); cmd.append(f"{k}={v}")
-    cmd.append("--build-arg"); cmd.append(f"GID={os.getresgid()[0]}")
     if secret:
       for s in secret.split(";"):
         cmd.append("--secret"); cmd.append(s)
@@ -158,14 +164,16 @@ Hint:
       s = self._cmdstr(cmd + [
         "-t",f"{name}_prod:{version}",
         "--progress=plain",
-        "--target","production","."],_show=False)
+        "--target","production","."],_show=True)
       if "Check complete, no warnings found" not in s: r += s
+      cmd.append("--build-arg"); cmd.append(f"GID={os.getresgid()[0]}")
+      cmd.append("--build-arg"); cmd.append(f"UID={os.getuid()}")
       s += self._cmdstr(cmd + [
         "-t",f"{name}_dev:{version}",
         "--progress=plain",
         "--build-context","projects=../../projects",
         "--target","development","."
-        ],_show=False)
+        ],_show=True)
       if "Check complete, no warnings found" not in s: r += s
       return r
     else:
@@ -173,6 +181,8 @@ Hint:
         "-t",f"{name}_prod:{version}",
         "--progress=plain",
         "--target","production","."],_show=True)
+      cmd.append("--build-arg"); cmd.append(f"GID={os.getresgid()[0]}")
+      cmd.append("--build-arg"); cmd.append(f"UID={os.getuid()}")
       self._cmdInteractive(cmd + [
         "-t",f"{name}_dev:{version}",
         "--progress=plain",
@@ -221,7 +231,9 @@ Hint:
           w.write(line)
 
   def dkrun(self, service:str) -> None:
-    """ Run a service in example/docker-compose.yml """
+    """ Run a service in example/docker-compose.yml
+      :param service: the service to run.
+    """
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
@@ -289,6 +301,7 @@ Hint:
     """ Run a command inside a service started by compose.yaml
     :param cmd: Command to run inside the container
     :param service: Optional name of the service to identify the container. Default expects one service and selects that.
+    :param user: Switch to this user to run the command, otherwise use the container default user.
     """
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
