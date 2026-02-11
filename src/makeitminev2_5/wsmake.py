@@ -59,15 +59,13 @@ class WSMake(Make):
         with open(ws,"r") as f:
           self._wsload(json.load(f))
       except Exception as e:
-        print(f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}")
-        os._exit(1)
+        assert not True, f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}"
     self.setpreference(key="ws",value=ws)
 
   def _getws(self) -> str:
     ws = self.getpreference("ws")
     if not ws:
-      print("ERROR: please use wsset to select or create a workspace")
-      os._exit(1)
+      assert not True, "ERROR: please use wsset to select or create a workspace"
     return ws
 
   def ws(self) -> None:
@@ -101,8 +99,7 @@ class WSMake(Make):
     if not path:
       path = self.cwd
     if not os.path.exists(path):
-      print(f"ERROR: cannot find project at {path}")
-      os._exit(1)
+      assert not True, f"ERROR: cannot find project at {path}"
     ws = self._getws()
     with open(ws,"r") as f:
       j = self._wsload(json.load(f))
@@ -121,12 +118,10 @@ class WSMake(Make):
     if not pj:
       pj = next(pj for pj,path in j.items() if path == self.cwd)
       if not pj:
-        print(f"ERROR: {self.cwd} not in {ws}")
-        os._exit(1)
+        assert not True, f"ERROR: {self.cwd} not in {ws}"
       print(f"info: removing {pj}")
     if pj not in j:
-      print(f"ERROR: {pj} is not in {ws}")
-      os._exit(1)
+      assert not True, f"ERROR: {pj} is not in {ws}"
     del j[pj]
     with open(ws,"w") as f: json.dump(self._wsdump(j),f)
 
@@ -137,13 +132,11 @@ class WSMake(Make):
     ws = self._getws()
     with open(ws,"r") as f: j=self._wsload(json.load(f))
     if not j:
-      print(f"ERROR: No projects in {ws}; see wsadd")
-      os._exit(1)
+      assert not True, f"ERROR: No projects in {ws}; see wsadd"
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
-      print("Error length of title not matching alignment")
-      os._exit(1)
+      assert not True, "Error length of title not matching alignment"
     body= []
     for k,v in j.items():
       if pj and k != pj: continue 
@@ -172,15 +165,13 @@ class WSMake(Make):
     ws = self._getws()
     with open(ws,"r") as f: j=self._wsload(json.load(f))
     if not j:
-      print(f"ERROR: No projects in {ws}; see wsadd")
-      os._exit(1)
+      assert not True, f"ERROR: No projects in {ws}; see wsadd"
     for k,v in j.items():
       if pj and k != pj: continue 
       os.chdir(v)
       f = getattr(self,cmd,None)
       if not f:
-        print(f"ERROR: no such command {cmd}")
-        os._exit(1)
+        assert not True, f"ERROR: no such command {cmd}"
       print(f"project:{v}")
       ret = f()
       r = r + ret if r else ret

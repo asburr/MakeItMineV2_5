@@ -1,6 +1,5 @@
 import inspect
 import argparse
-import os
 import re
 
 
@@ -82,6 +81,7 @@ def ap_decorator_main(cls):
   for n in dir(cls):
     if n.startswith("_"): continue
     func = getattr(cls,n)
+    if not callable(func): continue
     ap_decorator_func(func,cls)
 
 def ap_decorator_runcmd(cls):
@@ -92,8 +92,7 @@ def ap_decorator_runcmd(cls):
   for (k,v) in zip(it,it):
     kwargs[k[2:]] = v
   if not hasattr(a, 'func'):
-    cls.parser_g.print_help()
-    os._exit(1)
+    assert not True, cls.parser_g.print_help()
   d = {k:v for k,v in a.__dict__.items() if k not in ["command","func"] and v is not None}
   r = getattr(m,a.func.__name__)(**(d | kwargs))
   if r is not None: print(r)

@@ -144,15 +144,13 @@ Hint:
             if v is None:
               m = f"ERROR in {self.dkf} in python: {p}"
               if check: return m
-              print(m)
-              os._exit(1)
+              assert not True, m
             cmd.append("--build-arg"); cmd.append(f"{k}={v}")
           elif not re.match(".*=.*",line):
             if k not in buildargk:
               m = f"ERROR, expecting: --buildargk {k} --buildargv <value> {line}"
               if check: return m
-              print(m)
-              sys.exit(1)
+              assert not True, m
     for k,v in zip(buildargk,buildargv):
       cmd.append("--build-arg"); cmd.append(f"{k}={v}")
     if secret:

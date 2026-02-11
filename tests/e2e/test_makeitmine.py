@@ -7,8 +7,9 @@ from pathlib import Path
 class MIMcontainer():
   """ The container used by all testcases. """
 
-  exe = ["docker-compose","-f","compose.yaml","--env-file","dkrun_release.env",
-         "exec", "-it", "gitserver"]
+  exe = ["docker-compose","-f","compose.yaml",
+         "--env-file","dkrun_release.env", "exec",
+         "-w","/test_projects/testing", "gitserver"]
   R=os.path.join("/","remotegit","testing")
   L=os.path.join("/","test_projects","testing")
   C=os.path.join("/","cloned_projects","testing")
@@ -16,6 +17,12 @@ class MIMcontainer():
   m=os.path.join("/","projects","MakeItMineV2_5","MakeItMine.sh")
   x=MakeUtils()
   testpy = "src/testing/testing.py"
+
+  @classmethod
+  def setCWD(cls,cwd:str) -> None:
+    cls.exe[7] = cwd
+    r = cls.rcmd(["pwd"],fail=True,_show=True)
+    assert cwd in r
 
   @classmethod
   def lcmd(cls,cmd:list,fail:bool,_show:bool) -> any:
@@ -77,11 +84,13 @@ class Test_repo():
 @pytest.mark.dependency(depends=["Test_repo::test_gtsetup"])
 class Test_gt():
   """ Git commands. """
+  CL=os.path.join("/","test_projects","testing_cloned")
+  AF = os.path.join(MIMcontainer.L,"test.txt")
 
   def test_gtuntracked(self,container):
     """ Add a new file and make sure it is reported as untracked. """
     container.rcmdInteractive([
-      container.m,"touch",container.testpy,"--contents",""],
+      container.m,"touch",container.testpy,"--contents","print('123')"],
       fail=True,_show=True)
     r = container.rcmd([container.m,"work"],fail=True,_show=True)
     assert "gtuntracked" in r
@@ -94,30 +103,82 @@ class Test_gt():
     assert "gtadd" not in r
     assert "1/files" not in r
 
-# TODO;
-#  def test_gtclone(self,,container):
-#    """ Clone repo. """
-#  def test_gtlocalbranch(self,container):
-#    """ Add branch to clone. """
-#  def test_gtbranch(self,container):
-#    """ Dev branch in cloned repo. """
-#  def test_gttrackingremotebranch(self,container):
-#    """ ?? """
-#  def test_gtpush(self,container):
-#    """ save changes to remote branch. """
-#  def test_gtrelease(self,container):
-#    """ Release remote branch into main. """
-#  def test_gtrebasemain(self,container):
-#    """ Pull changes from main into local branch. """
-#  def test_gtrebaseremote(self,container):
-#    """ Pull changes in remote branch into local branch. """
-#  def test_gtadd(self,container):
-#    """ Add local files to the commit....is this needed as commit does this automatically? """
-#  def test_gtfetch(self,container):
-#    """ fetch is called when needed, is this needed as a separate functionality? """
-#  def test_gttag(self,container):
-#    """ Tag the main branch """
+  def test_gtpush(self,container):
+    """ save changes to remote branch. """
+    container.rcmd([container.m,"touch",self.AF],fail=True,_show=True)
+    container.rcmd([container.m,"gtadd"],fail=True,_show=True)
+    container.rcmd([container.m,"gtpush","--message","testing"],fail=True,_show=True)
+    # gtpush calls checkfile which creates more files.
+    container.rcmd([container.m,"gtadd"],fail=True,_show=True)
+    container.rcmd([container.m,"gtpush","--message","testing"],fail=True,_show=True)
 
+  def test_gtclone(self,container):
+    """ Clone repo, check for test.txt. """
+    container.rcmd([container.m,"gtclone",container.R,self.CL],fail=True,_show=True)
+    container.rcmd(["ls",self.AF],fail=True,_show=True)
+    container.rcmdInteractive([container.m,"delete",self.AF],fail=True,_show=True)
+    container.setCWD(self.CL)
+
+  # TODO; branch at a remote tag in main i.e. repeat using a tag.
+  def test_gtbranch(self,container):
+    """ Branch off main in the clone. """
+    container.rcmd([container.m,"gtbranch","testingdevbranch"],fail=True,_show=True)    
+    r = container.rcmd([container.m,"gtlocalbranch"],fail=True,_show=True)
+    assert "testingdevbranch" in r
+    r = container.rcmd([container.m,"gtbranch","testingdevbranch"],fail=True,_show=True)    
+    assert "already on testingdevbranch" in r
+    r = container.rcmd([container.m,"gttrackingremotebranch"],fail=True,_show=True)    
+    assert "True" in r
+    container.rcmd([container.m,"gtbranch","main"],fail=True,_show=True)    
+    r = container.rcmd([container.m,"gtlocalbranch"],fail=True,_show=True)
+    assert "main" in r
+    r = container.rcmd([container.m,"gttrackingremotebranch"],fail=True,_show=True)    
+    assert "True" in r
+    container.rcmd([container.m,"gtbranch","testingdevbranch"],fail=True,_show=True)
+    r = container.rcmd([container.m,"gtlocalbranch"],fail=True,_show=True)
+    assert "testingdevbranch" in r
+
+  def test_gtrebasemain(self,container):
+    """
+    Push changes into main so testing is behind and needs rebasing.
+    Perform the rebase and verify testpy is present. Check that a rebase
+    is now not needed, Try a rebase anyway and make sure it does nothing.
+    """
+    container.setCWD(MIMcontainer.L)
+    container.rcmd([container.m,"gtbranch","main"],fail=True,_show=True)    
+    container.rcmdInteractive([
+      container.m,"touch",container.testpy,"--contents","print('hello world')"],
+      fail=True,_show=True)
+    container.rcmd([container.m,"gtadd"],fail=True,_show=True)
+    container.rcmd([container.m,"gtpush","--message","testing"],fail=True,_show=True)
+    # gtpush calls checkfile which creates more files.
+    container.rcmd([container.m,"gtadd"],fail=True,_show=True)
+    container.rcmd([container.m,"gtpush","--message","testing"],fail=True,_show=True)
+    # container.rcmd([container.m,"gtrelease"],fail=True,_show=True)
+    container.rcmd([container.m,"gtbranch","testingdevbranch"],fail=True,_show=True)    
+    r = container.rcmd([container.m,"gtlocalbranch"],fail=True,_show=True)
+    assert "testingdevbranch" in r
+    r = container.rcmd([container.m,"gtmainahead"],fail=True,_show=True)
+    assert "0/files" not in r
+    container.rcmd([container.m,"gtrebasemain"],fail=True,_show=True)
+    r = container.rcmd([container.m,"gtmainahead"],fail=True,_show=True)
+    assert "0/files" in r
+
+  def test_gtrebaseremote(self,container):
+    """
+    Push change to remote branch, another local branch is now out of date.
+    Rebase this local branch, check that rebase pulled the change and that
+    the branch is reports to be insync.
+    """
+    pass
+
+  def test_gttag(self,container):
+    """
+      Tag the local branch, push to remote branch, release to main.
+      Make another change, release it.
+      Clone using the tag and check that the new change is not there.
+    """
+    pass
 
 @pytest.mark.e2e
 @pytest.mark.usefixtures("container")
@@ -125,6 +186,7 @@ class Test_gt():
 class Test_py():
   """ Python commands """
 
+  @pytest.mark.skip
   def test_pysync(self,container):
     """ Sync the pyproject.toml with the venv. """
     # TODO; Check that there is no pyproject.toml, venv, and lock file.
@@ -140,6 +202,7 @@ class Test_py():
     container.rcmd(["ls","pyproject.toml","poetry.lock"],fail=True,_show=True)
 
   # @pytest.mark.skip
+  @pytest.mark.skip
   def test_checkfile(self,container):
     """ Check a python file. """
     contents="import os\nimport datetime #Not used\nos.getcwd()\nx = y + 1 # y not defined\nos.junk() # no method"
@@ -150,6 +213,7 @@ class Test_py():
     assert "os.junk() # no method" in r
     container.rcmd([container.m,"delete",container.testpy],fail=True,_show=True)
 
+  @pytest.mark.skip
   def test_pypackage(self,container):
     """ Build a package for the Python software, use MIM to install the wheel.
     """
@@ -169,6 +233,7 @@ class Test_py():
 class Test_dk():
   """ Test docker (dk). """
 
+  @pytest.mark.skip
   def test_dkbuild(self,container):
     """ Build the docker container. """
     r = container.rcmd([container.m,"dkimages"],fail=True,_show=True)

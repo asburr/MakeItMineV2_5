@@ -6,6 +6,8 @@ import subprocess
 
 class MakeUtils():
   """ Utils """
+  my_env = os.environ.copy()
+  my_env["PYTHONUNBUFFERED"] = "1"
 
   def __init__(self,**kwargs):
     self.cwd = os.getcwd()
@@ -64,11 +66,9 @@ class MakeUtils():
   def _cmd(cls,cmd:list, _show:bool=False, fail:bool=True,stderr:bool=False) -> list:
     """ util: Non-interactive stdin and stdout, this command captures stdin and stdout returning as a list of lines. """
     if _show: print(" ".join(cmd))
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, env=cls.my_env, capture_output=True, text=True)
     if proc.returncode != 0:
-        if fail:
-          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}")
-          os._exit(1)
+        assert not True, f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}"
     e = proc.stderr.strip()
     e = e.split(os.linesep) if e else []
     o = proc.stdout.strip()
@@ -93,43 +93,43 @@ class MakeUtils():
   def _cmdInteractive(cls,cmd:list,fail:bool=True,_show:bool=False) -> None:
     """ util: Interactive stdin and stdout, this command outputs to the user and takes input from the user. """
     if _show: print(" ".join(cmd))
-    proc = subprocess.run(cmd)
+    proc = subprocess.run(cmd, env=cls.my_env)
     if proc.returncode != 0:
-        if fail:
-          print(f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}")
-          os._exit(1)
+        assert not True, f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}"
 
   @classmethod
-  def _newermtime(cls,mtime:float,p:str) -> bool:
+  def _newermtime(cls,mtime:float,p:str) -> str:
     """ anything in p including subdirs that is newer than target """
     t = os.path.getmtime(p)
     if t > mtime:
-      return True
+      return p
     if os.path.isdir(p):
         for root, dirs, files in os.walk(p):
-          if [x for x in files if os.path.getmtime(os.path.join(root,x)) > mtime]:
-            return True
+          lst = [x for x in files if os.path.getmtime(os.path.join(root,x)) > mtime]
+          if lst: return os.path.join(root,lst[0])
           for dir in dirs:
-            if cls._newermtime(mtime,os.path.join(root,dir)):
-              return True
-    return False
+            p = os.path.join(root,dir)
+            if cls._newermtime(mtime,p):
+              return p
+    return None
 
   @classmethod
-  def _rebuild_target(cls,target:str,dependencies: list,msg:bool=True) -> bool:
+  def _rebuild_target(cls,target:str,dependencies: list,msg:bool=True) -> str:
     """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
     if not os.path.exists(target):
       if msg: print(f"target '{target}' does not exist rebuilding")
-      return True
+      return target
     mtime = os.path.getmtime(target)
     for dependency in dependencies:
       if not os.path.exists(dependency):
         if msg: print(f"target '{target}' is out of date, dependency '{dependency}' does not exist assuming it will be built when rebuilding target.")
-        return True
-      if cls._newermtime(mtime,dependency):
+        return dependency
+      p = cls._newermtime(mtime,dependency)
+      if p:
         if msg: print(f"target '{target}' is out of date, dependency '{dependency}' is older than dependency and needs rebuilding")
-        return True
+        return p
     if msg: print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
-    return False
+    return None
 
   @classmethod
   def _workreduce(cls,align:list,titles:list,body:list) -> (list,list):

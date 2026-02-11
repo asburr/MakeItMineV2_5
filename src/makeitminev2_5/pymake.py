@@ -15,6 +15,7 @@ class PyMake(Make,MakeUtils):
   def _checkfile(self,file:str) -> str:
     """ Check Python syntax """
     if file.endswith(".py"):
+      self.pysync()
       ruff = self._cmdstr([self.poetry_p,"run","ruff","check","--quiet","--ignore=E402,F541,E70",file],fail=False,_show=True,stderr=True)
       if ruff: return ruff
       lint = self._cmdstr([self.poetry_p,"run","pylint","--errors-only","--disable=C,R",file],fail=False,_show=True,stderr=True)
@@ -50,8 +51,7 @@ class PyMake(Make,MakeUtils):
     name = self.name()
     p = os.path.join(self.src,name)
     if not os.path.exists(p):
-      print(f"ERROR: cannot find source path {p}")
-      os._exit(1)
+      assert not True, f"ERROR: cannot find source path {p}"
     self.init_dot_py()
     packaging = self.pypackageshow()
     check = self.pycheck()
@@ -104,7 +104,7 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 # dev group - packages for pytest and pyintegrationtest and installed from pypi.
-dev = ["pytest"]
+dev = ["pytest", "pylint", "ruff"]
 # inhouse_prod group - inhouse packages used by CI/CD job to install packages from pypi.
 inhouse_prod = ["setuptools"]
 # inhouse_wsdev group - inhouse packages used in development, install packages as editable from local path.
@@ -164,8 +164,7 @@ __version__ = version("{name}")
       else:
         t = 'version\("'+name+'"\)'
         if not self._grep(p,t):
-          print(f"ERROR: incorrect package name in {p}, expecting {t}, BUILD_VERISON.txt has the name '{name}'")
-          os._exit(1)
+          assert not True, f"ERROR: incorrect package name in {p}, expecting {t}, BUILD_VERISON.txt has the name '{name}'"
     else:
       with open(p,"w") as f:
         f.write(text)
@@ -186,8 +185,7 @@ __version__ = version("{name}")
         is "requests^2.1.1" which means any version >=2.1.1 and < 3.0.0.
     """
     if self.name() == package:
-      print(f"ERROR:Cannot install {package} to the project with the same name.")
-      os._exit(1)
+      assert not True, f"ERROR:Cannot install {package} to the project with the same name."
     p = self.findproject(name=package,root=root) # Look for a local package.
     self.pysync() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
@@ -202,8 +200,7 @@ __version__ = version("{name}")
       self.pypackage()
       wheel = self.pywheel()
       if not os.path.exists(wheel):
-        print(f"ERROR: {wheel} does not exit")
-        os._exit(1)
+        assert not True, f"ERROR: {wheel} does not exit"
       os.chdir(cwd)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],_show=True)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],_show=True)
@@ -226,15 +223,13 @@ __version__ = version("{name}")
   def pyupdateminor(self,package:str) -> str:
     """ venv and lock file - update package to the latest minor version. """
     if package in self._cmd([self.poetry_p,"_show","--only","internal_prod"],_show=True):
-      print("ERROR: package is in dev and prod group, use pyadd")
-      os._exit(1)
+      assert not True, "ERROR: package is in dev and prod group, use pyadd"
     self._cmd([self.poetry_p,"update",package],_show=True)
 
   def pyupdatemajor(self,package:str) -> str:
     """ venv and lock file - update package to the latest major version. """
     if package in self._cmd([self.poetry_p,"_show","--only","internal_prod"],_show=True):
-      print("ERROR: package is in dev and prod group, use pyadd")
-      os._exit(1)    
+      assert not True, "ERROR: package is in dev and prod group, use pyadd"
     self._cmd([self.poetry_p,"add",package],_show=True)
 
   def pysync(self) -> None:
@@ -264,8 +259,9 @@ __version__ = version("{name}")
     """ Check if package needs rebuilding. """
     if not os.path.exists(self.wheel):
       return "No package"
-    if self._rebuild_target(self.wheel,[self.toml,"src"],msg=False):
-      return "package behind source\n"+self.pypackaged()
+    p = self._rebuild_target(self.wheel,[self.toml,"src"],msg=False)
+    if p:
+      return f"package behind source ({p})\n"+self.pypackaged()
     return ""
 
   def pypackage(self) -> None:

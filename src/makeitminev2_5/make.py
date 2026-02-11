@@ -169,8 +169,7 @@ class Make(ABC,MakeUtils):
       if version:
         os.chdir(p)
         if self.version() != version:
-          print(f"{p} has version {self.version()} expecting to find {version}")
-          os._exit(1)
+          assert not True, f"{p} has version {self.version()} expecting to find {version}"
     return p
 
   def README_dot_txt(self) -> None:

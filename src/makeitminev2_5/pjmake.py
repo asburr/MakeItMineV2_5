@@ -32,8 +32,7 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
   def _workwarning(self,pj:str) -> None:
     """ Any warnings. """
     if self.name().lower() != self.name():
-      print(f"ERROR: name in {self.bv} must be lowercase")
-      os._exit(1)
+      assert not True, f"ERROR: name in {self.bv} must be lowercase"
 
   def work(self) -> None:
     """ work remaining in the workflow for this project. """
@@ -42,8 +41,7 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
-      print("Error length of title not matching alignment")
-      os._exit(1)
+      assert not True, "Error length of title not matching alignment"
     (align,t) = self._workreduce(align,titles,[self._work()])
     if t:
       align = ["l"] + align
@@ -59,8 +57,7 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
-      print("Error length of title not matching alignment")
-      os._exit(1)
+      assert not True, "Error length of title not matching alignment"
     align = ["l"] + align
     t = [["project"]+titles] + [[name]+self._work()]
     table.set_cols_align(align)
@@ -85,6 +82,12 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
     """
     if os.path.exists(p):
       os.remove(p)
+
+  def setcwd(self,p:str) -> None:
+    """ Set the users's shell to change dir to p on login. """
+    with open(os.path.join(self.home,".bashrc"),"a") as f:
+      f.write(f"cd {p}"+os.linesep)
+
 
 if __name__ == "__main__":
   PjMake.main()
