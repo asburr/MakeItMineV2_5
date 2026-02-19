@@ -2,13 +2,15 @@ from makeitminev2_5.dkmake import DkMake
 from makeitminev2_5.gtmake import GtMake
 from makeitminev2_5.pymake import PyMake
 from makeitminev2_5.djmake import DJMake
+from makeitminev2_5.fkmake import FKMake
 from makeitminev2_5.wsmake import WSMake
 from texttable import Texttable
 import shutil
 import os
+from makeitminev2_5.makeutils import MakeUtils
 
 
-class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
+class PjMake(FKMake,DJMake,DkMake,PyMake,GtMake,WSMake):
   """ Project make using other makes. """
 
   def upversion(self) -> None:
@@ -32,16 +34,17 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
   def _workwarning(self,pj:str) -> None:
     """ Any warnings. """
     if self.name().lower() != self.name():
-      assert not True, f"ERROR: name in {self.bv} must be lowercase"
+      MakeUtils.stop(f"ERROR: name in {self.bv} must be lowercase")
 
   def work(self) -> None:
     """ work remaining in the workflow for this project. """
+    self.create_files()
     name = self.name()
     table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
-      assert not True, "Error length of title not matching alignment"
+      MakeUtils.stop("Error length of title not matching alignment")
     (align,t) = self._workreduce(align,titles,[self._work()])
     if t:
       align = ["l"] + align
@@ -57,7 +60,7 @@ class PjMake(DJMake,DkMake,PyMake,GtMake,WSMake):
     align = self._work_align()
     titles = self._workTitles()
     if len(align) != len(titles):
-      assert not True, "Error length of title not matching alignment"
+      MakeUtils.stop("Error length of title not matching alignment")
     align = ["l"] + align
     t = [["project"]+titles] + [[name]+self._work()]
     table.set_cols_align(align)

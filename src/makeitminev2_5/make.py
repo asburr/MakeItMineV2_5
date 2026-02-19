@@ -42,6 +42,14 @@ class Make(ABC,MakeUtils):
     return r
 
   @abstractmethod
+  def create_files(self):
+    """ Create files required by the recipies.
+    TODO; not all users want all recipies, how to do this in a inobtrusive way?
+    Perhaps have options to activate recipies for a project.
+    """
+    pass
+
+  @abstractmethod
   def _release(self) -> None:
     """ Release a project. """
     pass

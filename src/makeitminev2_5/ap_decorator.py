@@ -1,6 +1,9 @@
 import inspect
 import argparse
 import re
+import sys
+import os
+from makeitminev2_5.makeutils import MakeUtils
 
 
 ap_decorator_doc = """
@@ -28,6 +31,7 @@ def  ap_decorator_func(func,cls):
   f""" Helper. {ap_decorator_doc} """
   if not getattr(cls, "parser_g", None):
     cls.parser_g = argparse.ArgumentParser(description="makeitmine")
+    cls.parser_g.add_argument("--stacktrace",action="store_true",help="Stacktrace on exit")
     cls.subparsers_g = cls.parser_g.add_subparsers(dest="command", help="commands")
     cls.subparser_g = {}
   n = func.__name__
@@ -85,14 +89,18 @@ def ap_decorator_main(cls):
     ap_decorator_func(func,cls)
 
 def ap_decorator_runcmd(cls):
+  """ A function to be called after ab_decorator_main to run the command """
   m = cls()
   a, unknown = cls.parser_g.parse_known_args()
+  d = a.__dict__
+  MakeUtils.stacktrace = d["stacktrace"]
+  del d["stacktrace"]
   kwargs={}
   it = iter(unknown)
   for (k,v) in zip(it,it):
     kwargs[k[2:]] = v
   if not hasattr(a, 'func'):
-    assert not True, cls.parser_g.print_help()
-  d = {k:v for k,v in a.__dict__.items() if k not in ["command","func"] and v is not None}
+    MakeUtils.stop(cls.parser_g.print_help())
+  d = {k:v for k,v in d.items() if k not in ["command","func"] and v is not None}
   r = getattr(m,a.func.__name__)(**(d | kwargs))
   if r is not None: print(r)

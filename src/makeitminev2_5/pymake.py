@@ -43,19 +43,32 @@ class PyMake(Make,MakeUtils):
     """ Titles for work """
     return super()._workTitles()+[
       "pycheck\nlocal>local\npysync",
-      "pypackaged\nlocal>local\npypackage"
+      "pypackagedshow\nlocal>local\npypackage"
     ]
 
   def _work(self) -> list:
     """ Gather project work """
     name = self.name()
-    p = os.path.join(self.src,name)
+    p = os.path.join(self.pysrc,name)
     if not os.path.exists(p):
-      assert not True, f"ERROR: cannot find source path {p}"
+      print(f"INFO creating {p}")
+      os.mkdir(self.pysrc)
+      os.mkdir(p)
+      for name in os.listdir(path="."):
+        if os.path.isfile(name) and name.endswith(".py"):
+          fp = os.path.join(p,name)
+          print(f"INFO: moving {name} to {p}")
+          os.rename(name,fp)
     self.init_dot_py()
+    self.pyproject_dot_toml()
     packaging = self.pypackageshow()
     check = self.pycheck()
     return super()._work()+[check,packaging]
+
+  def create_files(self):
+    super().create_files()
+    self.pyproject_dot_toml()
+    self.init_dot_py()
 
   ### End framework required implementations.
  
@@ -66,7 +79,7 @@ class PyMake(Make,MakeUtils):
       raise Exception("Cannot find poetry. Install poetry in a different venv (not this project) using pip install poetry")
     self.venv = self._cmdstr([self.poetry_p,"env","info","--path"],fail=False,_show=False)
     self.python_p = os.path.join(self.venv,"bin","python") if self.venv else ""
-    self.src = "src"
+    self.pysrc = "src"
     self.toml = "pyproject.toml"
     self.pye2etest_touchfile = os.path.join("tests","e2e",".done.touch")
     self.pyunittest_touchfile = os.path.join("tests","unittest",".done.touch")
@@ -152,7 +165,7 @@ markers = [
         i.e. package.__version__.
     """
     name=self.name()
-    p=os.path.join(self.src,name,"__init__.py")
+    p=os.path.join(self.pysrc,name,"__init__.py")
     text=f'''
 from importlib.metadata import version, PackageNotFoundError
 __version__ = version("{name}")
@@ -164,7 +177,7 @@ __version__ = version("{name}")
       else:
         t = 'version\("'+name+'"\)'
         if not self._grep(p,t):
-          assert not True, f"ERROR: incorrect package name in {p}, expecting {t}, BUILD_VERISON.txt has the name '{name}'"
+          MakeUtils.stop(f"ERROR: incorrect package name in {p}, expecting {t}, BUILD_VERISON.txt has the name '{name}'")
     else:
       with open(p,"w") as f:
         f.write(text)
@@ -185,7 +198,7 @@ __version__ = version("{name}")
         is "requests^2.1.1" which means any version >=2.1.1 and < 3.0.0.
     """
     if self.name() == package:
-      assert not True, f"ERROR:Cannot install {package} to the project with the same name."
+      MakeUtils.stop(f"ERROR:Cannot install {package} to the project with the same name.")
     p = self.findproject(name=package,root=root) # Look for a local package.
     self.pysync() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
@@ -200,7 +213,7 @@ __version__ = version("{name}")
       self.pypackage()
       wheel = self.pywheel()
       if not os.path.exists(wheel):
-        assert not True, f"ERROR: {wheel} does not exit"
+        MakeUtils.stop(f"ERROR: {wheel} does not exit")
       os.chdir(cwd)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],_show=True)
       self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],_show=True)
@@ -223,14 +236,19 @@ __version__ = version("{name}")
   def pyupdateminor(self,package:str) -> str:
     """ venv and lock file - update package to the latest minor version. """
     if package in self._cmd([self.poetry_p,"_show","--only","internal_prod"],_show=True):
-      assert not True, "ERROR: package is in dev and prod group, use pyadd"
+      MakeUtils.stop("ERROR: package is in dev and prod group, use pyadd")
     self._cmd([self.poetry_p,"update",package],_show=True)
 
   def pyupdatemajor(self,package:str) -> str:
     """ venv and lock file - update package to the latest major version. """
     if package in self._cmd([self.poetry_p,"_show","--only","internal_prod"],_show=True):
-      assert not True, "ERROR: package is in dev and prod group, use pyadd"
+      MakeUtils.stop("ERROR: package is in dev and prod group, use pyadd")
     self._cmd([self.poetry_p,"add",package],_show=True)
+
+  def python(self) -> None:
+    """ Opens a python shell in the projects venv """
+    print("quit() to quit the shell")
+    self._cmdInteractive([self.poetry_p,"run","python"],_show=True)
 
   def pysync(self) -> None:
     """ Sync pyproject.toml and lockfile and venv. With editable and
@@ -261,7 +279,7 @@ __version__ = version("{name}")
       return "No package"
     p = self._rebuild_target(self.wheel,[self.toml,"src"],msg=False)
     if p:
-      return f"package behind source ({p})\n"+self.pypackaged()
+      return f"package behind source ({p})\n"+self.pypackagedshow()
     return ""
 
   def pypackage(self) -> None:
@@ -295,7 +313,7 @@ __version__ = version("{name}")
     self._cmdInteractive([self.poetry_p,"run","pytest","-vv","-s","-m","e2e"],_show=True)
     self._touch(self.pye2etest_touchfile)
 
-  def pypackaged(self) -> str:
+  def pypackagedshow(self) -> str:
     """ Return when build was last built """
     if not os.path.exists(self.wheel): return "Not packaged"
     o = os.path.getmtime(self.wheel)

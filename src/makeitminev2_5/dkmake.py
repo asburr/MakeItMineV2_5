@@ -27,6 +27,11 @@ class DkMake(Make):
     """ List of visible paths to ignore. """
     return super()._ignorepaths() + [self.dkdr]
 
+  def create_files(self):
+    super().create_files()
+    self.create_Dockerfile()
+    self._dot_dockerignore()
+
   def create_Dockerfile(self) -> None:
     """ Create the initial Dockerfile if does not exist. """
     os.makedirs("docker",exist_ok=True)

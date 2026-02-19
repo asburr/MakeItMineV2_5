@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from pathlib import Path
 import subprocess
 
@@ -8,6 +9,7 @@ class MakeUtils():
   """ Utils """
   my_env = os.environ.copy()
   my_env["PYTHONUNBUFFERED"] = "1"
+  stacktrace = False
 
   def __init__(self,**kwargs):
     self.cwd = os.getcwd()
@@ -67,7 +69,7 @@ class MakeUtils():
     """ util: Non-interactive stdin and stdout, this command captures stdin and stdout returning as a list of lines. """
     if _show: print(" ".join(cmd))
     proc = subprocess.run(cmd, env=cls.my_env, capture_output=True, text=True)
-    if proc.returncode != 0:
+    if fail and proc.returncode != 0:
         assert not True, f"Failed to run '{' '.join(cmd)}' exit code={proc.returncode}{os.linesep} stderr={proc.stderr}stdout={proc.stdout}"
     e = proc.stderr.strip()
     e = e.split(os.linesep) if e else []
@@ -120,6 +122,7 @@ class MakeUtils():
       if msg: print(f"target '{target}' does not exist rebuilding")
       return target
     mtime = os.path.getmtime(target)
+    deps = f', dependencies are {",".join(dependencies)}' if dependencies else ""
     for dependency in dependencies:
       if not os.path.exists(dependency):
         if msg: print(f"target '{target}' is out of date, dependency '{dependency}' does not exist assuming it will be built when rebuilding target.")
@@ -128,7 +131,7 @@ class MakeUtils():
       if p:
         if msg: print(f"target '{target}' is out of date, dependency '{dependency}' is older than dependency and needs rebuilding")
         return p
-    if msg: print(f'target "{target}" is up to date, dependencies are {",".join(dependencies)}')
+    if msg: print(f'target "{target}" is up to date{deps}')
     return None
 
   @classmethod
@@ -147,3 +150,15 @@ class MakeUtils():
   def _setcwdX(self,pj:str=None) -> None:
     """ Util: change dir to pj or cwd """
     os.chdir(pj if pj else self.cwd)
+
+  @classmethod
+  def stop(cls,msg:str) -> None:
+    """
+    Stops the program with exit code 1.
+    Uses assert to stop the program if running within pytest so the test will fail rather that pytest stopping.
+    """
+    if "pytest" in sys.modules or cls.stacktrace:
+      assert not True, print(msg)
+    else:
+      print(msg)
+      os._exit(1)
