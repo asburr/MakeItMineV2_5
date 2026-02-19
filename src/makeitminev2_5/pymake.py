@@ -215,15 +215,15 @@ __version__ = version("{name}")
       if not os.path.exists(wheel):
         MakeUtils.stop(f"ERROR: {wheel} does not exit")
       os.chdir(cwd)
-      self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],_show=True)
-      self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],_show=True)
-      self._cmd([self.poetry_p,"add","--group","inhouse_prod",f'"{package}=={version}"'],_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],fail=True,_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],fail=True,_show=True)
+      self._cmd([self.poetry_p,"add","--group","inhouse_prod",f'"{package}=={version}"'],fail=True,_show=True)
       return
     # pypi package.
     if version:
-      self._cmd([self.poetry_p,"add","--group","main",f'"{package}=={version}"'],_show=True)
+      self._cmd([self.poetry_p,"add","--group","main",f'"{package}=={version}"'],fail=True,_show=True)
     else:
-      self._cmd([self.poetry_p,"add","--group","main",package],_show=True)
+      self._cmd([self.poetry_p,"add","--group","main",package],fail=True,_show=True)
 
   def pyuninstall(self,package:str) -> str:
     """ pyproject.toml, venv, and lock file - remove package. """
