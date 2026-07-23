@@ -36,6 +36,9 @@ class Make(_ABCMake, _MakeUtils):
   def _work(self) -> list: return super()._work()
   def _work_align(self) -> list: return super()._work_align()
 
+  bv = "BUILD_VERSION.txt"
+  readme = "README.md"
+  
   def checkfile(self,file:str) -> str:
     """ Check the syntax in a file
     :param file: Path to the file to be checked
