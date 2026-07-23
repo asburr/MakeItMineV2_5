@@ -1,22 +1,24 @@
 import os
-from makeitminev2_5.pymake import PyMake
+from makeitminev2_5.abc_make import _ABCMake
 
 
-class FKMake(PyMake):
+class FKMake(_ABCMake):
   """ Recipies for a Makefile supporting a Flask project.
   """
+  _name = "fl"
+  _fullname = "flask"
+  _active_default = False
 
   def __init__(self,**kwargs):
     super().__init__(**kwargs)
     self.fksrc = os.path.join("src",self.name(),"flaskapp")
     self.fkdb = os.path.join("test", "flask.sqlite")
+
+  def _create_files(self):
     if not os.path.exists("test"):
       os.mkdir("test")
     if not os.path.exists(self.fksrc):
       os.mkdir(self.fksrc)
-
-  def create_files(self):
-    super().create_files()
     p = os.path.join(self.fksrc,"__init__.py")
     if not os.path.exists(p):
       print(f"INFO creating {p}")
@@ -169,7 +171,8 @@ def testing_get(test_id,field2):
     self.pysync()
     self._cmdInteractive([self.poetry_p,"run","flask","--app",f"{self.name()}.flaskapp","init-db"],_show=True)
     print("connect to http://127.0.0.1:5000/<endpoint>")
-    self._cmdInteractive([self.poetry_p,"run","flask","--app",f"{self.name()}.flaskapp","run","--debug"],_show=True)
+    # "--debug" This option is too verbose..
+    self._cmdInteractive([self.poetry_p,"run","flask","--app",f"{self.name()}.flaskapp","run"],_show=True)
 
 if __name__ == "__main__":
   FKMake.main()

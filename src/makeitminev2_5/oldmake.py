@@ -71,21 +71,6 @@ class Make():
     for line in output.strip().split("\n"):
       print(f">>>{line}")
 
-  def __rebuild_target(self,target:str,dependencies: list) -> bool:
-    """ util: Check if target needs rebuild based on its dependencies having a newer timestamp. """
-    if not os.path.exist(target):
-      print(f"{target} does not exist rebuilding")
-      return True
-    for dependency in dependencies:
-      if not os.path.exist(dependency):
-        print(f"{dependency} does not existi assuming it will be built when rebuilding {target}")
-        return True
-      if os.path.getmtime(dependency) > os.path.getmtime(target):
-        print(f"{target} is older than {dependency} and needs rebuilding")
-        return True
-    print(f"{target} is up to date")
-    return False
-
   def pyproject_dot_toml(self) -> str:
     """ Create pyproject.toml if one does not exists. """
     if os.path.exists("pyproject.toml"):
@@ -333,7 +318,7 @@ download/
     target="requirements.txt"
     target2=os.path.join("dist",target)
     p = os.path.join("dist","download")
-    if not self.__rebuild_target(target,[p,target2,"venv"]): return
+    if not self._rebuild_target(target,[p,target2,"venv"]): return
     self.requirement_from_venv()
     os.makedirs(p,exists_ok=True)
     # ignore means => dont re-download when exists.
@@ -355,7 +340,7 @@ download/
   def dkbuild(self,secret:str) -> None:
     """ Build container using docker/Dockerfile. Optional secret is semicolon separated of id-<id>,src=<path> """
     touchfile=os.path.join("docker","dkbuild")
-    if not self.__rebuild_target(touchfile,[self.dkf]): return
+    if not self._rebuild_target(touchfile,[self.dkf]): return
     self.dkcheck()
     name = self.projectname()
     version = self.projectversion()

@@ -1,12 +1,15 @@
 import os
 import sys
 import re
-from makeitminev2_5.make import Make
+from makeitminev2_5.abc_make import _ABCMake
 
 
-class DkMake(Make):
+class DkMake(_ABCMake):
   """ Platform independent recipies for a Makefile supporting a Docker projects.
   """
+  _name = "dk"
+  _fullname = "docker and compose"
+  _active_default = False
 
   def _checkfile(self,file:str) -> bool:
     if file == "Dockerfile":
@@ -27,8 +30,8 @@ class DkMake(Make):
     """ List of visible paths to ignore. """
     return super()._ignorepaths() + [self.dkdr]
 
-  def create_files(self):
-    super().create_files()
+  def _create_files(self):
+    self._setpreference(self._name,True)
     self.create_Dockerfile()
     self._dot_dockerignore()
 
@@ -291,6 +294,7 @@ Hint:
     """ Tails the logs from services in example/docker-compose.yml
     :param service: select a service. Default is logs from all services.
     """
+    if self._getpreference(self._name,False) == False: return;
     if not os.path.exists(self.dkdc):
       print(f"{self.dkdc} does not exist")
       return
@@ -399,7 +403,3 @@ Hint:
       self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
     if os.path.exists(self.dkf):
       self._sed(self.dkf,f'{name}==[0-9.]*',f'{name}=={version}')
-
-
-if __name__ == "__main__":
-  DkMake.main()

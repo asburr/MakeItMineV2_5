@@ -1,14 +1,18 @@
 import os
 import datetime
-from makeitminev2_5.make import Make
-from makeitminev2_5.makeutils import MakeUtils
+from makeitminev2_5.abc_make import _ABCMake
+from makeitminev2_5.makeutils import _MakeUtils
 
 
-class GtMake(Make):
+class GtMake(_ABCMake):
   """ Platform independent recipies for a Makefile supporting GIT. Trunk
   based developement is working on temporary branches directly off main.
   """
 
+  _name = "git"
+  _fullname = "git"
+  _active_default = False
+  
   def _checkfile(self,file:str) -> str:
     return super()._checkfile(file)
 
@@ -98,7 +102,7 @@ class GtMake(Make):
   def gtignorefile(self,file:str) -> None:
     """ Add file to git ignore. """
     if not os.path.exists(file):
-      MakeUtils.stop(f"ERROR: No such file {file}")
+      _MakeUtils.stop(f"ERROR: No such file {file}")
     filename = os.path.basename(file)
     if self._grep(self.gitignore,filename):
       print(f"INFO: {filename} in {self.gitignore}")
@@ -115,10 +119,10 @@ class GtMake(Make):
       :param path: local path for the repo being cloned.
     """
     if os.path.exists(path):
-      MakeUtils.stop(f"ERROR: path {path} already exists")
+      _MakeUtils.stop(f"ERROR: path {path} already exists")
     p = os.path.dirname(path)
     if not os.path.exists(p):
-      MakeUtils.stop(f"ERROR: project root {p} must exists")
+      _MakeUtils.stop(f"ERROR: project root {p} must exists")
     self._cmd(["git","clone",url,path],_show=True)
 
   def gtbranch(self,branch:str,tag:str=None) -> None:
@@ -136,7 +140,7 @@ class GtMake(Make):
     if tag:
       tags = self._cmd(["git","tag","--format","%(refname:short)"],_show=True)
       if tag not in tags:
-        MakeUtils.stop(f"no tag called '{tag}', available tags {tags}")
+        _MakeUtils.stop(f"no tag called '{tag}', available tags {tags}")
     self._cmd(["git","fetch","--all"],_show=True)
     if f"origin/{branch}" in self._cmd(["git","branch","--list","-r","--format","%(refname:short)"],_show=True):
       # A remote branch exists, track it after the switch.
@@ -287,11 +291,11 @@ class GtMake(Make):
   def gtsetupshow(self) -> None:
     """ Show the status of the local repo with user name and email. """
     if not self.gtrepo():
-      MakeUtils.stop(f"{os.getcwd()} is not a repo\nCreate a remote repo using your favourite git service.\Then, gtsetup --location url")
+      _MakeUtils.stop(f"{os.getcwd()} is not a repo\nCreate a remote repo using your favourite git service.\Then, gtsetup --location url")
     name = self._cmdstr(["git","config","--global","user.name"],_show=True)
     email = self._cmdstr(["git","config","--global","user.email"],_show=True)
     if not email or not name:
-      MakeUtils.stop("Setup local git, run gtsetup --name you --email yours")
+      _MakeUtils.stop("Setup local git, run gtsetup --name you --email yours")
 
   def gtsetup(self,location:str=None,name:str=None,email:str=None) -> None:
     """ Initialize CWD as a local repo and/or setup user name and email for
@@ -304,12 +308,12 @@ class GtMake(Make):
     if email: self._cmd(["git","config","--global","user.email",email],_show=True)
     if location:
       if self.gtrepo():
-        MakeUtils.stop(f"ERROR: {self.cwd} is a git project")
+        _MakeUtils.stop(f"ERROR: {self.cwd} is a git project")
       self.gtignore()
       email = self._cmdstr(["git","config","--global","user.email"],_show=True)
       name = self._cmdstr(["git","config","--global","user.email"],_show=True)
       if not email or not name:
-        MakeUtils.stop("ERROR: use gtinit to set email and name")
+        _MakeUtils.stop("ERROR: use gtinit to set email and name")
       self._cmdInteractive(["git","init","--initial-branch","main","."],_show=True)
       self.gtadd()
       # Before push, must have at least one commit in the local history.
@@ -326,7 +330,7 @@ class GtMake(Make):
     """
     for u in self._cmd(["git","remote","get-url","origin","--all"],_show=True):
       if u != url:
-        MakeUtils.stop(f"different url in .git/config please edit to delete the url {u}")
+        _MakeUtils.stop(f"different url in .git/config please edit to delete the url {u}")
       else:
         print(f"{url} already in .git/config wont readd")
         return

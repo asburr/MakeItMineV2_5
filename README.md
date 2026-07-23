@@ -31,7 +31,7 @@ Clone the repo from https://github.com/asburr/MakeItMineV2_5.
 ### Executing program
 Run the script MakeItMine.sh.
 ```
-alias MIM=~/project/MakeItMineV2_5/MakeItMine.sh
+alias MIM=~/projects/MakeItMineV2_5/MakeItMine.sh
 MIM --help
 ```
 ### Testing MIM
@@ -43,7 +43,7 @@ Workflows inherit an abstract framework from Make in make.py.
 Abstraction: _ignorepaths, _checkfile(file), _workTitles(), _work(),
 _work_align(), wspjpath().
 ### Common utilities
-Workflows also inherit utilities from MakeUtils in makeutils.py.
+Workflows also inherit utilities from _MakeUtils in makeutils.py.
 utils: _touch(p), _sed(fn,pattern,s), _grep(fn,pattern), _append(fn,line),
 _cmd(cmd,_show,fail,stderr), _cmdstr(cmd,_show,fail,stderr),
 _cmdInteractive(cmd,fail,_show), _rebuild_target(target,dependencies)

@@ -1,4 +1,4 @@
-from makeitminev2_5.makeutils import MakeUtils
+from makeitminev2_5.makeutils import _MakeUtils
 import os
 import pytest
 from pathlib import Path
@@ -15,7 +15,7 @@ class MIMcontainer():
   C=os.path.join("/","cloned_projects","testing")
   lm=os.path.join(Path.home(),"projects","MakeItMineV2_5","MakeItMine.sh")
   m=os.path.join("/","projects","MakeItMineV2_5","MakeItMine.sh")
-  x=MakeUtils()
+  x=_MakeUtils()
   testpy = "src/testing/testing.py"
 
   @classmethod

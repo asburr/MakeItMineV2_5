@@ -1,35 +1,40 @@
-from abc import ABC, abstractmethod
 import os
 import re
 import json
 from pathlib import Path
-from makeitminev2_5.ap_decorator import ap_decorator_main, ap_decorator_runcmd
-from makeitminev2_5.makeutils import MakeUtils
+from makeitminev2_5.abc_make import _ABCMake
+from makeitminev2_5.makeutils import _MakeUtils
 
 
-class Make(ABC,MakeUtils):
-  """ MakeItMine framework """
+class Make(_ABCMake, _MakeUtils):
+  """
+  MakeItMine framework.
   
-  def __init__(self,**kwargs):
-    super().__init__(**kwargs)
-    self.bv = "BUILD_VERSION.txt"
-    self.readme = "README.md"
-    self.preferences = os.path.join(Path.home(),".makeitmine.json")
+  Each class is a recipe and methods are automatically added to the CLI as
+  targets under the recipe. Method needs a docstring and no underscore in the
+  method name, the CLI excludes inherited methods.
+  
+  BUILDVERSION.txt contains a text representation of the version using the format
+  of major.minor.build. Make creates the initial version. "name" and
+  "version" access the project name and version.
+  
+  README.txt is the standard file. Make creates the inital README.
+  """
 
-  @abstractmethod
-  def _ignorepaths(self) -> list:
-    """ List of visible paths to ignore. """
-    return []
-
-  @abstractmethod
-  def _checkfile(self,file:str) -> str:
-    """ Check the syntax and semantics in a file """
-    if file.endswith(".json"):
-      with open(file,"r",encoding='utf-8') as f:
-        try:
-          json.load(f)
-        except Exception as e:
-          return f"{file} bad json syntax error is {e}"
+  """ Add Make to prj, """
+  _name = "prj"
+  _fullname = "project"
+  _active_default = True
+  
+  """ Must implement the framework. """
+  def _release(self) -> None: return super()._release()
+  def _ignorepaths(self) -> list: return super()._ignorepaths()
+  def _checkfile(self,file:str) -> str: return super()._checkfile(file)
+  def _upversionneeded(self) -> bool: super()._upversionneeded()
+  def _upversion(self,version:str,oldversion:str) -> None: super()._upversion(version,oldversion)
+  def _workTitles(self) -> list: return super()._workTitles()
+  def _work(self) -> list: return super()._work()
+  def _work_align(self) -> list: return super()._work_align()
 
   def checkfile(self,file:str) -> str:
     """ Check the syntax in a file
@@ -41,76 +46,62 @@ class Make(ABC,MakeUtils):
     if not r: self._touch(touch)
     return r
 
-  @abstractmethod
-  def create_files(self):
-    """ Create files required by the recipies.
-    TODO; not all users want all recipies, how to do this in a inobtrusive way?
-    Perhaps have options to activate recipies for a project.
+  def _classActivateCheck(cls,func):
+      """ Check if class is active."""
+      def wrapper(*args, **kwargs):
+        class_name = func.__qualname__.split(".")[0]
+        name = globals()[class_name]._name
+        if cls._getpreference(name,False) == False:
+          print(f"{name} is not active")
+          return None
+        return func(*args, **kwargs)
+      return wrapper
+  
+  def _classActivation(cls):
+    """ Wraps each method with a check that that class is activated.
     """
-    pass
+    for name in dir(cls):
+      if name.startswith("_"): continue
+      func = getattr(cls,name)
+      if not callable(func): continue
+      setattr(cls, name, cls._classActivateCheck(func))
+      return cls
 
-  @abstractmethod
-  def _release(self) -> None:
-    """ Release a project. """
-    pass
-
-  @abstractmethod
-  def _upversionneeded(self) -> bool:
-    """ Is up version needed. """
-    pass
-
-  @abstractmethod
-  def _upversion(self,version:str,oldversion:str) -> None:
-    """ Up version the project. """
-    pass
-
-  @abstractmethod
-  def _workTitles(self) -> list:
-    """ Titles for work """
-    return []
-
-  @abstractmethod
-  def _work(self) -> list:
-    """ Gather project work """
-    return []
-
-  @abstractmethod
-  def _work_align(self) -> list:
-    """ Gather table alignment as "l" "r" "c" """
-    return []
-
-  @classmethod
-  def main(cls):
-    ap_decorator_main(cls)
-    ap_decorator_runcmd(cls)
-
-  def getpreference(self,key:str) -> str:
-    """ Preferences are stored in home/.makeitmine.json
-    :param key: Key to preference
-    :return: value for the key or None.
+  def activate(self,name:str):
+    """ Activate recipes.
+    :param name: recipes to activate
     """
-    if not os.path.exists(self.preferences): return None
-    try:
-      with open(self.preferences,"r") as f:
-        j = json.load(f)
-        return j.get(key,f)
-    except Exception as e:
-      print(f"ERROR: {self.preferences} is corrupt {e}")
+    if self._getpreference(name) is None:
+      print(f"{name} no such service")
+      return
+    if self._getpreference(name) is True:
+      print(f"{name} is already activated")
+      return
+    self._setpreference(name, True)
 
-  def setpreference(self,key:str,value:str) -> None:
-    """ Preferences are stored in home/.makeitmine.json
-    :param key: Key to preference
-    :param value: Value for key.
+  def deactivate(self,name:str):
+    """ Deactivate recipes.
+    :param name: recipe to deactivate
     """
+    if self._getpreference(name) is None:
+      print(f"{name} no such service")
+      return
+    if name in [self._name,]:
+      print(f"Cannot deactivate {name}")
+      return
+    if not self._getpreference(name) is False:
+      print(f"{name} is already deactivated")
+      return
+    self._setpreference(name, False)
+
+  def info(self):
+    """ Show preferences """
+    print(f"Preferences: {self.preferences}")
     if os.path.exists(self.preferences):
-      with open(self.preferences,"w") as f:
-        json.dump({key:value},f)
-    else:
       with open(self.preferences,"r") as f:
         j = json.load(f)
-        j[key]=value
-        json.dump(f,j)
-
+        print(json.dumps(j,indent=5))
+    
   def ignorepaths(self) -> list:
     """ List of paths to ignore """
     return self._ignorepaths()
@@ -142,6 +133,25 @@ class Make(ABC,MakeUtils):
         m = re.search('^(.*):(.*)',line)
         if m:
           return m.group(2)
+
+  def changeversion(self,pos:str="build",down:bool=False):
+    """ Increment or decrement the project version of major, minor, or build. """
+    name = self.name()
+    oldversion = self.version()
+    a = [int(x) for x in oldversion.split(".")]
+    if pos == "major": a[0] += -1 if down else 1
+    elif pos == "minor": a[1] += -1 if down else 1
+    elif pos == "build": a[2] += -1 if down else 1
+    else: raise Exception(f"Unknown pos {pos}")
+    version = ".".join(a)
+    p=os.path.join(self.cwd,f".{self.bv}")
+    with open(p,"w") as f: f.write(f"{name}:{version}")
+    self.syncversion()
+
+  def syncversion(self):
+    """ Synchronize BUILD_VERSION with other recipes. """
+    version = self.version()
+    self._upversion(version,version)
 
   def _findproject(self,name:str,version:str=None,root:str=None) -> str:
     """ Find a project in the users home directory.

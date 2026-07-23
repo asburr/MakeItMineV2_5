@@ -2,20 +2,26 @@ import os
 import json
 from pathlib import Path
 from typing import Any
-from makeitminev2_5.make import Make
+from makeitminev2_5.abc_make import _ABCMake
 from texttable import Texttable
 
 
-class WSMake(Make):
-  """ Workspace work. """
+class WSMake(_ABCMake):
+  """ Workspace is a collection of projects that are
+      colocated under a root path.
+  """
 
+  _name = "ws"
+  _fullname = "workspace"
+  _active_default = False
+  
   def _findproject(self,name:str,version:str=None,root:str=None) -> str:
     """ Return path to a project in the workspace.
     :param name: Name of the project.
     :param version: Version of the project.
     :param root: Not used when searching the workspace.
     """
-    ws = self.getpreference("ws")
+    ws = self._getpreference("ws")
     if not ws: return super()._findproject(name,version,root)
     with open(ws,"r") as f:
       return self._wsload(json.load(f)).get(name,None)
@@ -60,10 +66,10 @@ class WSMake(Make):
           self._wsload(json.load(f))
       except Exception as e:
         assert not True, f"ERROR: {ws} is not a workspace file or is corrupt, error is {e}"
-    self.setpreference(key="ws",value=ws)
+    self._setpreference(key="ws",value=ws)
 
   def _getws(self) -> str:
-    ws = self.getpreference("ws")
+    ws = self._getpreference("ws")
     if not ws:
       assert not True, "ERROR: please use wsset to select or create a workspace"
     return ws

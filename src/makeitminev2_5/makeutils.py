@@ -5,12 +5,13 @@ from pathlib import Path
 import subprocess
 
 
-class MakeUtils():
+class _MakeUtils():
   """ Utils """
   my_env = os.environ.copy()
   my_env["PYTHONUNBUFFERED"] = "1"
   stacktrace = False
-
+  _name = "_makeutils"
+  
   def __init__(self,**kwargs):
     self.cwd = os.getcwd()
     self.home = Path.home()
@@ -22,7 +23,7 @@ class MakeUtils():
 
   @classmethod
   def _sed(cls,fn:str,pattern:str,s:str) -> None:
-    """ Util: Change pattern to s if s not already in line that matches pattern. """
+    """ Util: Change text that matches pattern to s, in all lines of file named fn. """
     changed=False
     hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
     with open(fn,"r") as i:
@@ -35,6 +36,25 @@ class MakeUtils():
               print(f"sed 's/{pattern}/{s}/g' {fn}")
               changed=True
             print(f">>>{nl}")
+    if not changed:
+      os.remove(hfn)
+    else:
+      os.rename(hfn,fn)
+
+  @classmethod
+  def _sedAfter(cls,fn:str,after:str,s:str) -> None:
+    """ Util: Add text "s" after line that matches "after"" in first matching line of file named fn. """
+    changed=False
+    hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
+    with open(fn,"r") as i:
+      with open(hfn,"w") as o:
+        for line in i:
+          o.write(line)
+          if line == after:
+            if not changed:
+              o.write(s)
+              print(f">>>{s}")
+              changed=True
     if not changed:
       os.remove(hfn)
     else:
@@ -155,9 +175,9 @@ class MakeUtils():
   def stop(cls,msg:str) -> None:
     """
     Stops the program with exit code 1.
-    Uses assert to stop the program if running within pytest so the test will fail rather that pytest stopping.
+    Uses assert to stop the program if running within pytest so the test will fail rather than pytest stopping.
     """
-    if "pytest" in sys.modules or cls.stacktrace:
+    if cls.stacktrace:
       assert not True, print(msg)
     else:
       print(msg)
