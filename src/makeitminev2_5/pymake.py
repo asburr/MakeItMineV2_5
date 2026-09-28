@@ -4,6 +4,8 @@ from pathlib import Path
 import datetime
 from makeitminev2_5.abc_make import _ABCMake
 from makeitminev2_5.makeutils import _MakeUtils
+import tomlkit
+from packaging.requirements import Requirement, InvalidRequirement
 
 
 class PyMake(_ABCMake,_MakeUtils):
@@ -29,6 +31,49 @@ class PyMake(_ABCMake,_MakeUtils):
   _PYPIP = "pip"
   _PYUV = "uv"
 
+  @classmethod
+  def _dependency_groups(cls, fn:str, add:bool, group:str, package:str, path:str=None, constraint:str=None):
+    """Add or remove package from pyproject.toml dependency-groups when using pip"""
+    if group not in ["dev","wheel","prod"]:
+      raise Exception(f"group {group}")
+    if path and constraint:
+      raise Exception(f"path {path} and constraint {constraint}")
+    if constraint:
+      package = f"{package} {constraint}"
+      try:
+        package = Requirement(package)
+      except InvalidRequirement:
+        raise Exception(f"invalid requirement {package}")
+    else:
+      try:
+        package = Requirement(package)
+      except InvalidRequirement:
+        raise Exception(f"invalid requirement {package}")
+    pyproject_path = Path(fn)
+    temp_path = pyproject_path.with_suffix(".tmp")
+    try:
+      content = pyproject_path.read_text(encoding="utf-8")
+      doc = tomlkit.parse(content)
+      dep_groups = doc.setdefault("dependency-groups", tomlkit.table())
+      dev_group = dep_groups.setdefault(group, tomlkit.array())
+      # Remove package from group if exists.
+      dep_groups[group] = [
+        dep for dep in dev_group
+        if Requirement(dep).name != package.name
+      ]
+      if add:
+        dev_group = dep_groups[group]
+        if path:
+          dev_group.append(f"{package} @ file://{path}")
+        else:
+          dev_group.append(str(package))
+      temp_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+      temp_path.replace(pyproject_path)
+    except Exception:
+      if temp_path.exists():
+          temp_path.unlink()
+      raise
+
   def _ignorepaths(self) -> list:
     return super()._ignorepaths() + ["venv","__pycache__", "dist"]
 
@@ -51,11 +96,9 @@ class PyMake(_ABCMake,_MakeUtils):
         self._stopmechanics()
     return super()._checkfile(file)
 
-  def _release(self) -> None:
-    super()._release()
+  def _release(self) -> None: super()._release()
 
-  def _upversionneeded(self) -> bool:
-    return super()._upversionneeded()
+  def _upversionneeded(self) -> bool: return super()._upversionneeded()
 
   def _upversion(self,version:str,oldversion:str) -> None:
     if self._mechanics == PyMake._PYPOETRY:
@@ -73,8 +116,9 @@ class PyMake(_ABCMake,_MakeUtils):
     super()._upversion(version,oldversion)
 
   def _work_align(self) -> list:
-    """ Gather table alignment as "l" "r" "c" """
     return super()._work_align()+["l","l"]
+
+  def _workwarning(self) -> None: return super()._workwarning()
 
   def _workTitles(self) -> list:
     """ Titles for work """
@@ -117,10 +161,9 @@ class PyMake(_ABCMake,_MakeUtils):
     Uv starts quickly due to being compiled code whereas poetry and pip are
     python. Uv installs quickly due to the venv having links to the cached
     packages, whereas poetry and pip copy the packages into the venv which is
-    both slower and takes up more disk space. TODO: is there an option in
-    Poetry to link to the cache rather than copy on the install????
+    both slower and takes up more disk space.
 
-    Note that Uv "workspace" and poetry "packageless project" is about multiple
+    Uv "workspace" and poetry "packageless project" is about multiple
     packages sharing a lockfile and venv. The multiple packages are in a
     monorepo which has a subdir per package. One of the packages
     is built for release, the other packages exist to support the released
@@ -158,7 +201,6 @@ class PyMake(_ABCMake,_MakeUtils):
       a = self._cmdstr([self.uv_p,"python","find"],fail=False,_show=False).split(os.path.sep)
       self.venv_bin = os.path.join(a[:-1])
       self.venv = os.path.join(a[:-2])
-      pass # TODO;
     self.python_p = os.path.join(self.venv,"bin","python") if self.venv else ""
     self.pysrc = "src"
     self.toml = "pyproject.toml"
@@ -190,9 +232,6 @@ class PyMake(_ABCMake,_MakeUtils):
     self.README_dot_txt()
     if not self._rebuild_target(self.toml,[]): return
     name = os.path.basename(self.cwd)
-    placeholder_package = "setuptools" # so groups are not empty.
-    # dev group - packages for pytest and pyintegration test and installed from pypi.
-    dev_deps = ["pylint","ruff","pytest","pytest-dependency","spyder-kernels==3.1"]
     with open(self.toml,"w") as f:
       f.write(f"""
 [project]
@@ -208,36 +247,29 @@ markers = [
   "unit: unit testing"
 ]
 """)
-    if self._mechanics == PyMake._PYPOETRY:
-      with open(self.toml,"a") as f:
-        f.write("""
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-""")
+    # dev group - packages for pytest and pyintegration test and installed from pypi.
+    dev_deps = ["pylint","ruff","pytest","pytest-dependency","spyder-kernels==3.1"]
+    placeholder_package = "setuptools" # so groups are not empty.
+    if self._mechanics == PyMake._PYPPOETRY:
+      self._cmd([self.poetry_p,"init","--build-backend","hatch"])
       for dep in dev_deps:
         self._cmd([self.poetry_p,"add","--group","dev",dep],_show=True)
-      # inhouse_prod group - inhouse packages used by CI/CD job to install packages from pypi.
-      # inhouse_wsdev group - inhouse packages used in development, install packages as editable from local path.
-      # inhouse_wsprod group - inhouse packages used in development, install wheels from local path to test the production install.
-      self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",placeholder_package],_show=True)
-      self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",placeholder_package],_show=True)
-      self._cmd([self.poetry_p,"add","--group","inhouse_prod",placeholder_package],_show=True)
-      # Note project root is automatically installed as editable when doing poetry install.
+      self._cmd([self.poetry_p,"add","--group","editable",placeholder_package],_show=True)
+      self._cmd([self.poetry_p,"add","--group","wheel",placeholder_package],_show=True)
+      self._cmd([self.poetry_p,"add","--group","prod",placeholder_package],_show=True)
     elif self._mechanics == PyMake._PYPIP:
-      dependencies="dependencies = ["
-      with open(self.toml,"a") as f:
-        f.write(f"""
-
-{dependencies}
-  "{placeholder_package}"
-]
-""")
       for dep in dev_deps:
-        _MakeUtils._sedAfter(fn=self.toml,after=dependencies,s=f"""  "{dep}",\n""")
+        self._dependency_groups(fn=self.toml,add=True,group="dev",package=dep);
+      self._dependency_groups(fn=self.toml,add=True,group="editable",package=placeholder_package)
+      self._dependency_groups(fn=self.toml,add=True,group="wheel",package=placeholder_package)
+      self._dependency_groups(fn=self.toml,add=True,group="prod",package=placeholder_package)
     elif self._mechanics == PyMake._PYUV:
-      pass # TODO;
+      self._cmd([self.uv_p,"init","--build-backend","hatch"])
+      for dep in dev_deps:
+        self._cmd([self.uv_p,"add","--no-sync","--group","dev",dep],_show=True)
+      self._cmd([self.uv_p,"add","--no-sync","--group","editable",placeholder_package],_show=True)
+      self._cmd([self.uv_p,"add","--no-sync","--group","wheel",placeholder_package],_show=True)
+      self._cmd([self.uv_p,"add","--no-sync","--group","prod",placeholder_package],_show=True)
     else:
       self._stopmechanics()
 
@@ -298,36 +330,60 @@ __version__ = version("{name}")
     """
     if self.name() == package:
       _MakeUtils.stop(f"ERROR:Cannot install {package} to the project with the same name.")
-    p = self.findproject(name=package,root=root) # Look for a local package.
+    local_package = self.findproject(name=package,root=root) # Look for a local package.
     self.sync() # Sync venv first before add packages.
     self.pyuninstall(package) # Uninstall the package from all groups before adding.
+    if local_package:
+      # Local package.
+      cwd = Path.cwd()
+      os.chdir(local_package)
+      v = self.version()
+      if v != version:
+        print(f"warning: {package} local version is {v}")
+        version = v
+      self.package()
+      wheel = self.pywheel()
+      if not os.path.exists(wheel):
+        _MakeUtils.stop(f"ERROR: {wheel} does not exit")
+      os.chdir(cwd)
     if self._mechanics == PyMake._PYPOETRY:
-      if p:
-        # Local package.
-        cwd = Path.cwd()
-        os.chdir(p)
-        v = self.version()
-        if v != version:
-          print(f"warning: {package} local version is {v}")
-          version = v
-        self.package()
-        wheel = self.pywheel()
-        if not os.path.exists(wheel):
-          _MakeUtils.stop(f"ERROR: {wheel} does not exit")
-        os.chdir(cwd)
-        self._cmd([self.poetry_p,"add","--group","inhouse_wsdev",p,"--editable"],fail=True,_show=True)
-        self._cmd([self.poetry_p,"add","--group","inhouse_wsprod",wheel],fail=True,_show=True)
-        self._cmd([self.poetry_p,"add","--group","inhouse_prod",f'"{package}=={version}"'],fail=True,_show=True)
+      if local_package:
+        self._cmd([self.poetry_p,"add","--lock","--group","editable",local_package,"--editable"],fail=True,_show=True)
+        self._cmd([self.poetry_p,"add","--lock","--group","wheel",wheel],fail=True,_show=True)
+        self._cmd([self.poetry_p,"add","--lock","--group","prod",f'"{package}=={version}"'],fail=True,_show=True)
         return
-      # pypi package.
       if version:
-        self._cmd([self.poetry_p,"add","--group","main",f'"{package}=={version}"'],fail=True,_show=True)
+        self._cmd([self.poetry_p,"add","--lock","--group","main",f'"{package}=={version}"'],fail=True,_show=True)
       else:
-        self._cmd([self.poetry_p,"add","--group","main",package],fail=True,_show=True)
+        self._cmd([self.poetry_p,"add","--lock","--group","main",package],fail=True,_show=True)
     elif self._mechanics == PyMake._PYPIP:
-      pass # TODO;
+      if not local_package:
+        if version:
+          self._cmd([self.pip_p,"install","--dry-run",f"{package}=={version}"],fail=True,_show=True)
+        else:
+          self._cmd([self.pip_p,"install","--dry-run",package],fail=True,_show=True)
+      if local_package:
+        self._dependency_groups(self.toml,add=True,group="dev",package=local_package)
+        self._dependency_groups(self.toml,add=True,group="wheel",package=wheel,fail=True,_show=True)
+        if version:
+          self._dependency_groups(self.toml,add=True,group="prod",package=package,constraint=f"=={version}")
+        else:
+          self._dependency_groups(self.toml,add=True,group="prod",package=package)
+        return
+      if version:
+        self._dependency_groups(self.toml,add=True,group=None,package=package,constraint=f"=={version}")
+      else:
+        self._dependency_groups(self.toml,add=True,group=None,package=package)
     elif self._mechanics == PyMake._PYUV:
-      pass # TODO;
+      if local_package:
+        self._cmd([self.uv_p,"add","--no-sync","--group","editable",local_package,"--editable"],fail=True,_show=True)
+        self._cmd([self.uv_p,"add","--no-sync","--group","wheel",wheel],fail=True,_show=True)
+        self._cmd([self.uv_p,"add","--no-sync","--group","prod",f'"{package}=={version}"'],fail=True,_show=True)
+        return
+      if version:
+        self._cmd([self.uv_p,"add","--no-sync",f'"{package}=={version}"'],fail=True,_show=True)
+      else:
+        self._cmd([self.uv_p,"add","--no-sync",package],fail=True,_show=True)
     else:
       self._stopmechanics()
 
@@ -336,9 +392,21 @@ __version__ = version("{name}")
     if self._mechanics == PyMake._PYPOETRY:
       print(self._cmdstr([self.poetry_p,"remove",package],fail=False,_show=True,stderr=True))
       print(self._cmdstr([self.poetry_p,"remove","--group","dev",package],fail=False,_show=True,stderr=True))
-      print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_wsdev",package],fail=False,_show=True,stderr=True))
-      print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_wsprod",package],fail=False,_show=True,stderr=True))
-      print(self._cmdstr([self.poetry_p,"remove","--group","inhouse_prod",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.poetry_p,"remove","--group","editable",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.poetry_p,"remove","--group","wheel",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.poetry_p,"remove","--group","prod",package],fail=False,_show=True,stderr=True))
+    elif self._mechanics == PyMake._PYPIP:
+      self._dependency_groups(self.toml,add=False,package=package)
+      self._dependency_groups(self.toml,add=False,group="dev",package=package)
+      self._dependency_groups(self.toml,add=False,group="editable",package=package)
+      self._dependency_groups(self.toml,add=False,group="wheel",package=package)
+      self._dependency_groups(self.toml,add=False,group="prod",package=package)
+    elif self._mechanics == PyMake._PYUV:
+      print(self._cmdstr([self.uv_p,"remove",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.uv_p,"remove","--group","dev",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.uv_p,"remove","--group","editable",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.uv_p,"remove","--group","wheel",package],fail=False,_show=True,stderr=True))
+      print(self._cmdstr([self.uv_p,"remove","--group","prod",package],fail=False,_show=True,stderr=True))
     else:
       self._stopmechanics()
 
@@ -348,9 +416,9 @@ __version__ = version("{name}")
     if self._mechanics == PyMake._PYPOETRY:
       self._cmdInteractive([self.poetry_p,"run","python"],_show=True)
     elif self._mechanics == PyMake._PYPIP:
-      pass # TODO;
+      self._cmdInteractive([self.venv_bin+"/python"],_show=True)
     elif self._mechanics == PyMake._PYUV:
-      pass # TODO;
+      self._cmdInteractive([self.uv_p,"run","python"],_show=True)
     else:
       self._stopmechanics()
 

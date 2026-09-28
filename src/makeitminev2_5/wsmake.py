@@ -26,26 +26,14 @@ class WSMake(_ABCMake):
     with open(ws,"r") as f:
       return self._wsload(json.load(f)).get(name,None)
 
-  def _checkfile(self,file:str) -> str:
-    return super()._checkfile(file)
-
-  def _release(self) -> None:
-    super()._release()
-
-  def _upversionneeded(self) -> bool:
-    return super()._upversionneeded()
-
-  def _upversion(self,version:str,oldversion:str) -> None:
-    super()._upversion(version,oldversion)
-
-  def _workTitles(self) -> list:
-    return super()._workTitles()
-
-  def _work(self) -> list:
-    return super()._work()
-
-  def _work_align(self) -> list:
-    return super()._work_align()
+  def _checkfile(self,file:str) -> str: return super()._checkfile(file)
+  def _release(self) -> None: super()._release()
+  def _upversionneeded(self) -> bool: return super()._upversionneeded()
+  def _upversion(self,version:str,oldversion:str) -> None: super()._upversion(version,oldversion)
+  def _workTitles(self) -> list: return super()._workTitles()
+  def _work(self) -> list:  return super()._work()
+  def _workwarning(self) -> None: return super()._workwarning()
+  def _work_align(self) -> list: return super()._work_align()
 
   ### End framework required implementations.
  

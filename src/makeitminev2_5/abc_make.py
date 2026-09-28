@@ -56,6 +56,11 @@ class _ABCMake(ABC):
     """ Gather table alignment as "l" "r" "c" """
     return []
 
+  @abstractmethod
+  def _workwarning(self) -> None:
+    """ Any warnings that the user show be aware of, or stop on critical errors. """
+    return
+
   preferences = os.path.join(Path.home(),".makeitmine.json")
 
   @classmethod

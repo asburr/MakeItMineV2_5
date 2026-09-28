@@ -14,14 +14,23 @@ ap_decorator_doc = """
     option name.
 """
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected (e.g. true/false, 1/0).")
 
 __d = {
-  bool: {"action":"store_true"},
+  bool: {"type":str2bool},
   int: {"type":int},
   str: {},
   list[int]: {"type":int,"nargs":"*"},
   list[str]: {"nargs":"*"},
-  list[bool]: {"action":"store_true","nargs":"*"}
+  list[bool]: {"type":str2bool,"nargs":"*"}
 }
 
 
@@ -74,9 +83,9 @@ def  ap_decorator_func(rootcls,func,cls):
   for name, param in params.items():
     if name.startswith("_"): continue
     m=re.search(f".*:param {name}: (.*)$",doc,flags=re.MULTILINE)
-    pdoc = ""
-    if m: pdoc = m.group(1)
     type_hint = param.annotation
+    pdoc = f"{type_hint.__name__}. "
+    if m: pdoc += m.group(1)
     if type_hint is inspect.Parameter.empty:
       raise Exception(f"ERROR: Missing type hint for {n}({name})")
     kwargs = __d.get(type_hint,None)
@@ -113,7 +122,18 @@ def ap_decorator_main(cls):
       if func is None: continue
       if not callable(func): continue
       ap_decorator_func(cls,func,subcls)
-    
+      
+def ap_decorator_mro_class_name(topcls, method_name: str):
+    """Inspect MRO classes from left to right."""
+    for cls in topcls.__class__.__mro__:
+        # Check if this specific class defines the method in its own dict (not inherited)
+        if method_name in cls.__dict__:
+            return cls.__name__
+    return None
+
+def execute_and_identify(self):
+    defining_cls = self.get_defining_class_name('name')
+    return f"Method 'name' is defined by {defining_cls}"
 
 def ap_decorator_runcmd(cls):
   """ A function to be called after ab_decorator_main to run the command """
@@ -130,7 +150,13 @@ def ap_decorator_runcmd(cls):
   if not hasattr(a, 'func'):
     _MakeUtils.stop(cls.main_p.print_help())
   d = {k:v for k,v in d.items() if k not in ["cls","command","func"] and v is not None}
-  m = a.cls()
-  print(a.func.__name__)
-  r = getattr(m,a.func.__name__)(**(d | kwargs))
-  if r is not None: print(r)
+  if False:
+    m = a.cls()
+    r = getattr(m,a.func.__name__)(**(d | kwargs))
+    if r is not None: print(r)
+  else:
+    # __get__ binds the method to the main cls which has the proper MRO, method
+    # runs on the main cls instead of where it was defined, so self now refers
+    # to an instance of the main class and references to self use the main
+    # class MRO to find attributes.
+    a.func.__get__(cls(), cls)(**(d | kwargs))

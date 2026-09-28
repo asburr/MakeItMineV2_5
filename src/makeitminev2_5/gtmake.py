@@ -8,13 +8,11 @@ class GtMake(_ABCMake):
   """ Platform independent recipies for a Makefile supporting GIT. Trunk
   based developement is working on temporary branches directly off main.
   """
-
   _name = "git"
   _fullname = "git"
   _active_default = False
   
-  def _checkfile(self,file:str) -> str:
-    return super()._checkfile(file)
+  def _checkfile(self,file:str) -> str: return super()._checkfile(file)
 
   def _upversion(self,pj:str,version:str,oldversion:str) -> str:
     """ Update files containing version from BUILDVERSION.txt. """
@@ -29,20 +27,16 @@ class GtMake(_ABCMake):
     a = a.split(os.linesep)
     return self.bv in a
 
-  def _changes(self,pj:str) -> bool:
-    """ Any changes to the project. """
-    return super._changes(pj)
+  def _changes(self,pj:str) -> bool: return super._changes(pj)
 
   def _workwarning(self) -> list:
     if self.gtlocalbranch() == "main":
       return ["warning (git): You are working on the main branch.\nHint: create a developer branch using 'gtbranch <branch name>'"]
     
   def _work_align(self) -> list:
-    """ Gather table alignment as "l" "r" "c" """
     return super()._work_align()+["l","l","l","l","l","l","l"]
 
   def _workTitles(self) -> list:
-    """ Titles for work """
     return super()._workTitles()+[
       "gtsetupshow\ngtsetup",
       "gtuntracked\nlocal>local\ngtadd",
@@ -53,7 +47,6 @@ class GtMake(_ABCMake):
       "gtmainbehind\nremote>main\ngtrelease"]
 
   def _work(self) -> list:
-    """ Gather project work """
     if not self.gtrepo(_show=False):
       return super()._work()+["not a repo","","","","","",""]
     email = self._cmdstr(["git","config","--global","user.email"],_show=False)

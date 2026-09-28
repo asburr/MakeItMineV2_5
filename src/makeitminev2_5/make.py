@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from makeitminev2_5.abc_make import _ABCMake
 from makeitminev2_5.makeutils import _MakeUtils
+from texttable import Texttable
+import shutil
 
 
 class Make(_ABCMake, _MakeUtils):
@@ -26,19 +28,30 @@ class Make(_ABCMake, _MakeUtils):
   _fullname = "project"
   _active_default = True
   
-  """ Must implement the framework. """
-  def _release(self) -> None: return super()._release()
-  def _ignorepaths(self) -> list: return super()._ignorepaths()
-  def _checkfile(self,file:str) -> str: return super()._checkfile(file)
-  def _upversionneeded(self) -> bool: super()._upversionneeded()
-  def _upversion(self,version:str,oldversion:str) -> None: super()._upversion(version,oldversion)
-  def _workTitles(self) -> list: return super()._workTitles()
-  def _work(self) -> list: return super()._work()
-  def _work_align(self) -> list: return super()._work_align()
-
   bv = "BUILD_VERSION.txt"
   readme = "README.md"
   
+  """ Implementation of the framework. """
+
+  def _release(self) -> None: return super()._release()
+
+  def release(self,major:int,minor:int) -> None:
+    """
+    Specify the major and minor version for the release.
+    Build and test before release. Change the version if provided in the
+    parameters, otherwise up version and release only when there are changes. """
+    version=f"{major}.{minor}.1"
+    self._upversion(version=version,oldversion=self.version())
+    self._release()
+
+  def _ignorepaths(self) -> list: return super()._ignorepaths()
+
+  def ignorepaths(self) -> list:
+    """ List of paths to ignore """
+    return self._ignorepaths()
+
+  def _checkfile(self,file:str) -> str: return super()._checkfile(file)
+
   def checkfile(self,file:str) -> str:
     """ Check the syntax in a file
     :param file: Path to the file to be checked
@@ -48,6 +61,58 @@ class Make(_ABCMake, _MakeUtils):
     r = self._checkfile(file)
     if not r: self._touch(touch)
     return r
+
+  def _upversionneeded(self) -> bool: super()._upversionneeded()
+  def _upversion(self,version:str,oldversion:str) -> None: super()._upversion(version,oldversion)
+
+  def upversion(self) -> None:
+    """ Update build version in BUILDVERSION.txt. """
+    oldversion = self.version()
+    a = oldversion.split(".")
+    version =f"{a[0]}.{a[1]}.{int(a[2])+1}"
+    name=self.name()
+    with open(self.bv,"w") as f:
+      f.write(f"{name}:{version}{os.linesep}")
+    self._upversion(version,oldversion)
+
+  def _workTitles(self) -> list: return super()._workTitles()
+  def _work(self) -> list: return super()._work()
+  def _work_align(self) -> list: return super()._work_align()
+  def _workwarning(self) -> None:
+    if self.name().lower() != self.name():
+      _MakeUtils.stop(f"ERROR: name in {self.bv} must be lowercase")
+    return super()._workwarning()
+
+  def work(self) -> None:
+    """ work remaining in the workflow for this project. """
+    self._workwarning()
+    name = self.name()
+    table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
+    align = self._work_align()
+    titles = self._workTitles()
+    if len(align) != len(titles):
+      _MakeUtils.stop("Error length of title not matching alignment")
+    (align,t) = self._workreduce(align,titles,[self._work()])
+    if t:
+      align = ["l"] + align
+      t = [["project"]+t[0]] + [[name]+t[1]]
+    table.set_cols_align(align)
+    table.add_rows(t)
+    print(table.draw())
+
+  def workflow(self) -> None:
+    """ Workflow for this project. """
+    name = self.name()
+    table = Texttable(max_width=shutil.get_terminal_size(fallback=(80, 24)).columns)
+    align = self._work_align()
+    titles = self._workTitles()
+    if len(align) != len(titles):
+      _MakeUtils.stop("Error length of title not matching alignment")
+    align = ["l"] + align
+    t = [["project"]+titles] + [[name]+self._work()]
+    table.set_cols_align(align)
+    table.add_rows(t)
+    print(table.draw())
 
   def _classActivateCheck(cls,func):
       """ Check if class is active."""
@@ -105,10 +170,6 @@ class Make(_ABCMake, _MakeUtils):
         j = json.load(f)
         print(json.dumps(j,indent=5))
     
-  def ignorepaths(self) -> list:
-    """ List of paths to ignore """
-    return self._ignorepaths()
-
   def BUILDVERSION_dot_txt(self) -> None:
     """ Create the initial build version file. """
     p=os.path.join(self.cwd,self.bv)
@@ -136,25 +197,6 @@ class Make(_ABCMake, _MakeUtils):
         m = re.search('^(.*):(.*)',line)
         if m:
           return m.group(2)
-
-  def changeversion(self,pos:str="build",down:bool=False):
-    """ Increment or decrement the project version of major, minor, or build. """
-    name = self.name()
-    oldversion = self.version()
-    a = [int(x) for x in oldversion.split(".")]
-    if pos == "major": a[0] += -1 if down else 1
-    elif pos == "minor": a[1] += -1 if down else 1
-    elif pos == "build": a[2] += -1 if down else 1
-    else: raise Exception(f"Unknown pos {pos}")
-    version = ".".join(a)
-    p=os.path.join(self.cwd,f".{self.bv}")
-    with open(p,"w") as f: f.write(f"{name}:{version}")
-    self.syncversion()
-
-  def syncversion(self):
-    """ Synchronize BUILD_VERSION with other recipes. """
-    version = self.version()
-    self._upversion(version,version)
 
   def _findproject(self,name:str,version:str=None,root:str=None) -> str:
     """ Find a project in the users home directory.

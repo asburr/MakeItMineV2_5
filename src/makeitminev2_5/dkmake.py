@@ -377,23 +377,21 @@ Hint:
     dev = self._cmd(["docker","images","-q",f"{name}_prod:{version}"],_show=_show)
     return ("yes/prod" if prod else "no/prod") + " " + ("yes/dev" if dev else "no/dev")
 
+  def _workwarning(self) -> None: return super()._workwarning()
+
   def _work_align(self) -> list:
-    """ Gather table alignment as "l" "r" "c" """
     return super()._work_align()+["c"]
 
   def _workTitles(self) -> list:
-    """ Titles for work """
     return super()._workTitles()+["dkimages\nlocal>local\ndkbuild"]
 
   def _work(self) -> list:
-    """ Gather project work """
     self.dkcheck(_show=False)
     images = self.dkimages(_show=False)
     images = "" if images == "yes/prod yes/dev" else images
     return super()._work()+[images]
 
   def _upversion(self,version:str,oldversion:str) -> str:
-    """ Update files with the build version. """
     name=self.name()
     if os.path.exists(self.dkr):
       self._sed(self.dkr,f'IMAGE\s*=\s*{name}:.*',f'IMAGE={name}:{version}')

@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 from pathlib import Path
 import subprocess
 
@@ -42,19 +41,43 @@ class _MakeUtils():
       os.rename(hfn,fn)
 
   @classmethod
-  def _sedAfter(cls,fn:str,after:str,s:str) -> None:
+  def _sedAfter(cls,fn:str,after:list[str],s:str) -> None:
     """ Util: Add text "s" after line that matches "after"" in first matching line of file named fn. """
     changed=False
+    after_idx = 0
     hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
     with open(fn,"r") as i:
       with open(hfn,"w") as o:
         for line in i:
           o.write(line)
-          if line == after:
-            if not changed:
+          if not changed and line == after[after_idx]:
+            if after_idx == len(after) -1:
               o.write(s)
               print(f">>>{s}")
               changed=True
+          o.write(s)
+    if not changed:
+      os.remove(hfn)
+    else:
+      os.rename(hfn,fn)
+
+  @classmethod
+  def _sedRemove(cls,fn:str,after:str,s:str) -> None:
+    """ Util: Delete lines containing text "s" after line that matches "after". """
+    changed=False
+    start=False
+    hfn = os.path.join(os.path.dirname(fn),f".{os.path.basename(fn)}")
+    with open(fn,"r") as i:
+      with open(hfn,"w") as o:
+        for line in i:
+          if start:
+            if s in line:
+              print(f"---{s}")
+              changed=True
+              continue
+          if line == after:
+            start = True
+          o.write(line)
     if not changed:
       os.remove(hfn)
     else:
